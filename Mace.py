@@ -80,8 +80,10 @@ TRANSLATIONS = {
 
         # Patch Notes
         'patch_title': 'Recent Updates & Timeline',
-        'patch_v102_title': 'Version 1.0.2 (Current)',
-        'patch_v102_desc': 'Added Modrinth API search, hardware telemetry monitor, and NeoForge modloader support.',
+        'patch_v103_title': 'Version 1.0.3 (Current)',
+        'patch_v103_desc': 'Added language switching, expanded settings options, and fully integrated NeoForge modloader support.',
+        'patch_v102_title': 'Version 1.0.2',
+        'patch_v102_desc': 'Added Modrinth API search and hardware telemetry monitor.',
         'patch_v101_title': 'Version 1.0.1',
         'patch_v101_desc': 'Optimized resource caching, accelerated asset downloading, and fixed UI elements.',
 
@@ -186,8 +188,10 @@ TRANSLATIONS = {
         'sec_2_desc': 'Токены авторизации и профили хранятся в зашифрованном виде.',
 
         'patch_title': 'История обновлений',
-        'patch_v102_title': 'Версия 1.0.2 (Текущая)',
-        'patch_v102_desc': 'Добавлен поиск Modrinth API, мониторинг железных ресурсов и поддержка NeoForge.',
+        'patch_v103_title': 'Версия 1.0.3 (Текущая)',
+        'patch_v103_desc': 'Добавлена смена языка, расширенные настройки и полноценная работа модлоадера NeoForge.',
+        'patch_v102_title': 'Версия 1.0.2',
+        'patch_v102_desc': 'Добавлен поиск Modrinth API и мониторинг железных ресурсов.',
         'patch_v101_title': 'Версия 1.0.1',
         'patch_v101_desc': 'Оптимизировано кэширование, ускорена загрузка файлов и улучшен интерфейс.',
 
@@ -272,7 +276,7 @@ TRANSLATIONS = {
         'comp_others': 'Інші лаунчери',
         'comp_row1': 'Швидкість запуску',
         'comp_row1_mace': '⚡ 1.5 секунди',
-        'comp_row1_oth': '🐢 Повільно',
+        'comp_row1_oth': 'Повільно',
         'comp_row2': 'Телеметрія ПК (CPU/RAM)',
         'comp_row2_mace': '✅ Вбудована',
         'comp_row2_oth': '❌ Відсутня',
@@ -281,7 +285,7 @@ TRANSLATIONS = {
         'comp_row3_oth': '❌ Ручне встановлення',
         'comp_row4': 'Автоналаштування Java',
         'comp_row4_mace': '✅ Повністю авто',
-        'comp_row4_oth': '⚠️ Частково / Вручну',
+        'comp_row4_oth': '⚠️ Частково / Вручную',
 
         'sec_title': '100% Безпека',
         'sec_1_title': 'Без вірусів',
@@ -290,8 +294,10 @@ TRANSLATIONS = {
         'sec_2_desc': 'Токени авторизації та профілі зберігаються в зашифрованому вигляді.',
 
         'patch_title': 'Історія оновлень',
-        'patch_v102_title': 'Версія 1.0.2 (Поточна)',
-        'patch_v102_desc': 'Додано пошук Modrinth API, моніторинг апаратних ресурсів та підтримку NeoForge.',
+        'patch_v103_title': 'Версія 1.0.3 (Поточна)',
+        'patch_v103_desc': 'Додано зміну мови, розширено налаштування та підключено повноцінну роботу NeoForge.',
+        'patch_v102_title': 'Версія 1.0.2',
+        'patch_v102_desc': 'Додано пошук Modrinth API та моніторинг апаратних ресурсів.',
         'patch_v101_title': 'Версія 1.0.1',
         'patch_v101_desc': 'Оптимізовано кешування, прискорено завантаження файлів та покращено інтерфейс.',
 
@@ -357,7 +363,6 @@ def index():
 def download_installer(filename):
     installer_dir = os.path.join(app.root_path, 'Mace Installer')
     
-
     file_path = os.path.join(installer_dir, filename)
     if not os.path.exists(file_path):
         return f"File not found at: {file_path}", 404
