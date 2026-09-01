@@ -472,6 +472,7 @@ def download_update(filename):
     return response
 
 # ================= АДМИН ПАНЕЛЬ =================
+# ================= АДМИН ПАНЕЛЬ =================
 @app.route('/admin', methods=['GET', 'POST'])
 def admin_panel():
     msg = ""
@@ -512,6 +513,45 @@ def admin_panel():
                     status_type = "warning"
             else:
                 msg = "No file selected!"
+                status_type = "error"
+
+        # === НОВИЙ ОБРОБНИК: Додавання оновлення в історію ===
+        elif action == 'add_patch' and session.get('admin_logged_in'):
+            version = request.form.get('version', '').strip()
+            desc_en = request.form.get('desc_en', '').strip()
+            desc_ru = request.form.get('desc_ru', '').strip()
+            desc_uk = request.form.get('desc_uk', '').strip()
+
+            if version and desc_en and desc_ru and desc_uk:
+                # Генеруємо ключі для TRANSLATIONS
+                v_clean = version.replace('.', '')
+                title_key = f'patch_v{v_clean}_title'
+                desc_key = f'patch_v{v_clean}_desc'
+
+                # Записуємо в динамічний TRANSLATIONS
+                TRANSLATIONS['en'][title_key] = f'Version {version}'
+                TRANSLATIONS['en'][desc_key] = desc_en
+
+                TRANSLATIONS['ru'][title_key] = f'Версия {version}'
+                TRANSLATIONS['ru'][desc_key] = desc_ru
+
+                TRANSLATIONS['uk'][title_key] = f'Версія {version}'
+                TRANSLATIONS['uk'][desc_key] = desc_uk
+
+                # За бажанням оновлюємо поточну версію додатка
+                global CURRENT_VERSION
+                CURRENT_VERSION = version
+
+                # Автоматичний коміт та пуш змін на GitHub
+                success, git_msg = git_push_changes(f"Admin added update patch v{version} to history")
+                if success:
+                    msg = f"Update v{version} added successfully to patch notes and pushed to GitHub!"
+                    status_type = "success"
+                else:
+                    msg = f"Update added locally, but Git push failed: {git_msg}"
+                    status_type = "warning"
+            else:
+                msg = "Please fill in all version and description fields!"
                 status_type = "error"
 
         elif action == 'logout':
