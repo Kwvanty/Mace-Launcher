@@ -1,11 +1,47 @@
 import os
-from flask import Flask, render_template, send_from_directory, request
+import hashlib
+import subprocess
+from flask import Flask, render_template, send_from_directory, request, redirect, url_for, session, make_response
 
 app = Flask(
     __name__,
-    template_folder='tamplate',
+    template_folder='templates',
     static_folder='static'
 )
+app.secret_key = 'mace_launcher_super_secret_key_change_me'
+
+
+ADMIN_PASSWORD_HASH = "1b24fbfacd5b57d04c0b955d4440299abca943cc36aed243bb0523571e2c8cd6"
+
+# Текущая актуальная версия лаунчера
+CURRENT_VERSION = "1.0.3"
+DOWNLOADS_FILE = "downloads.txt"
+
+GIT_REPO_URL = "https://github.com/Kwvanty/Mace-Launcher.git"
+
+def get_download_count():
+    if not os.path.exists(DOWNLOADS_FILE):
+        return 0
+    try:
+        with open(DOWNLOADS_FILE, 'r', encoding='utf-8') as f:
+            return int(f.read().strip())
+    except Exception:
+        return 0
+
+def increment_download_count():
+    count = get_download_count() + 1
+    with open(DOWNLOADS_FILE, 'w', encoding='utf-8') as f:
+        f.write(str(count))
+    return count
+
+def git_push_changes(commit_message):
+    try:
+        subprocess.run(["git", "add", "."], check=True)
+        subprocess.run(["git", "commit", "-m", commit_message], check=True)
+        subprocess.run(["git", "push", GIT_REPO_URL, "HEAD:main"], check=True)
+        return True, "Successfully pushed to GitHub!"
+    except Exception as e:
+        return False, f"Git push error: {str(e)}"
 
 TRANSLATIONS = {
     'en': {
@@ -20,7 +56,9 @@ TRANSLATIONS = {
         'theme_dark': '🌙 Dark Theme',
         'hero_title': 'Mace Launcher',
         'hero_desc': 'Next-generation fast, convenient, and powerful Minecraft launcher.',
+        'downloads_count': 'Downloads',
         'btn_download': 'Download Installer',
+        'btn_updates': 'Updates Available',
         'btn_learn_more': 'Learn More',
         'features_title': 'Launcher Features',
         'feat_1_title': '⚡ High Performance',
@@ -42,17 +80,13 @@ TRANSLATIONS = {
         'custom_row3_title': 'Personalization',
         'custom_row3_desc': 'Custom avatar frames, animated profile cards, and unique launch sounds.',
 
-        # Module Layout Section (New for imglauncher4)
+        # Module Layout Section
         'modules_title': 'Flexible Modular Interface',
         'modules_desc': 'Rearrange modules, change panel forms, and set up your perfect layout drag-and-drop style.',
         'mod_feat_1': '✨ Drag & Drop placement',
         'mod_feat_2': '📐 Resizable panel shapes',
         'mod_feat_3': '🎨 Module background opacity',
 
-        # Modloaders & API
-        'mod_title': 'Full Modpack & API Integration',
-        'mod_desc': 'One-click installation for popular mod loaders and Modrinth modpacks.',
-        
         # Comparison Table
         'comp_title': 'Why Choose Mace Launcher?',
         'comp_feature': 'Feature',
@@ -71,12 +105,39 @@ TRANSLATIONS = {
         'comp_row4_mace': '✅ Full Auto',
         'comp_row4_oth': '⚠️ Partial / Manual',
 
-        # Security
+        # Combined Section
+        'comb_title': 'Security, System Requirements & FAQ',
         'sec_title': '100% Safe & Secure',
         'sec_1_title': 'No Malware',
         'sec_1_desc': 'Clean installer without third-party adware or bloatware.',
         'sec_2_title': 'Encrypted Sessions',
         'sec_2_desc': 'Your authorization tokens and account data stay locally encrypted.',
+
+        'sys_title': 'System Requirements',
+        'sys_os_title': 'Operating System',
+        'sys_os_desc': 'Windows 10 / 11 (64-bit)',
+        'sys_cpu_title': 'Processor',
+        'sys_cpu_desc': 'Intel Core i3 / AMD Ryzen 3 or higher',
+        'sys_ram_title': 'RAM Memory',
+        'sys_ram_desc': '4 GB (8 GB recommended)',
+        'sys_java_title': 'Java Environment',
+        'sys_java_desc': 'Pre-built (Automatic setup)',
+
+        'faq_title': 'Frequently Asked Questions',
+        'faq_q1': 'Is Mace Launcher completely free?',
+        'faq_a1': 'Yes, Mace Launcher is 100% free to use for all Minecraft players.',
+        'faq_q2': 'Does it support popular mods and modloaders?',
+        'faq_a2': 'Absolutely! Full support for Fabric, Forge, NeoForge, and custom modpacks is built right in.',
+        'faq_q3': 'How do I allocate more RAM to the game?',
+        'faq_a3': 'Open Launcher Settings -> Memory allocation -> Drag the slider to your desired RAM amount.',
+
+        # Updates Modal & Instructions
+        'update_modal_title': 'Update Instructions',
+        'update_step1': '1. Download the update file below.',
+        'update_step2': '2. Place the downloaded file into the "updates" folder inside your Mace Launcher directory ("Mace Launcher\\updates").',
+        'update_step3': '3. Launch Mace Launcher.',
+        'update_step4': '4. Follow the instructions in the opened launcher window.',
+        'update_btn_download': 'Download Update File',
 
         # Patch Notes
         'patch_title': 'Recent Updates & Timeline',
@@ -87,7 +148,7 @@ TRANSLATIONS = {
         'patch_v101_title': 'Version 1.0.1',
         'patch_v101_desc': 'Optimized resource caching, accelerated asset downloading, and fixed UI elements.',
 
-        # How to start & FAQ
+        # How to start
         'how_title': 'How to Start Playing in 3 Steps',
         'step_1_title': '1. Download',
         'step_1_desc': 'Get the official MaceInstaller.exe by clicking the button above.',
@@ -95,22 +156,6 @@ TRANSLATIONS = {
         'step_2_desc': 'Run the installer and follow the simple setup wizard instructions.',
         'step_3_title': '3. Play',
         'step_3_desc': 'Choose your favorite version or modpack and jump right into the game!',
-        'sys_title': 'System Requirements',
-        'sys_os_title': 'Operating System',
-        'sys_os_desc': 'Windows 10 / 11 (64-bit)',
-        'sys_cpu_title': 'Processor',
-        'sys_cpu_desc': 'Intel Core i3 / AMD Ryzen 3 or higher',
-        'sys_ram_title': 'RAM Memory',
-        'sys_ram_desc': '4 GB (8 GB recommended)',
-        'sys_java_title': 'Java Environment',
-        'sys_java_desc': 'Pre-built (Automatic setup)',
-        'faq_title': 'Frequently Asked Questions',
-        'faq_q1': 'Is Mace Launcher completely free?',
-        'faq_a1': 'Yes, Mace Launcher is 100% free to use for all Minecraft players.',
-        'faq_q2': 'Does it support popular mods and modloaders?',
-        'faq_a2': 'Absolutely! Full support for Fabric, Forge, NeoForge, and custom modpacks is built right in.',
-        'faq_q3': 'How do I allocate more RAM to the game?',
-        'faq_a3': 'Open Launcher Settings -> Memory allocation -> Drag the slider to your desired RAM amount.',
         
         # Modal & Footer
         'modal_title': 'Thank you for downloading!',
@@ -132,7 +177,9 @@ TRANSLATIONS = {
         'theme_dark': '🌙 Тёмная тема',
         'hero_title': 'Mace Launcher',
         'hero_desc': 'Быстрый, удобный и мощный лаунчер Minecraft нового поколения.',
+        'downloads_count': 'Скачиваний',
         'btn_download': 'Скачать Инсталлятор',
+        'btn_updates': 'Доступно обновление',
         'btn_learn_more': 'Узнать больше',
         'features_title': 'Преимущества лаунчера',
         'feat_1_title': '⚡ Высокая скорость',
@@ -154,16 +201,14 @@ TRANSLATIONS = {
         'custom_row3_title': 'Персонализация',
         'custom_row3_desc': 'Загрузка собственных фонов, кастомные иконки профиля и уникальные эффекты переходов.',
 
-        # Модульная сетка (imglauncher4)
+        # Модульная сетка
         'modules_title': 'Гибкая модульная сетка',
         'modules_desc': 'Перетаскивайте блоки, изменяйте форму модулей и адаптируйте рабочий экран под свои задачи.',
         'mod_feat_1': '✨ Перенос блоков Drag & Drop',
         'mod_feat_2': '📐 Изменение формы и размера',
         'mod_feat_3': '🎨 Настройка прозрачности панелей',
 
-        'mod_title': 'Интеграция с Modrinth и Модлоадерами',
-        'mod_desc': 'Установка популярных загрузчиков и сборок с Modrinth в один клик.',
-
+        # Сравнение
         'comp_title': 'Почему именно Mace Launcher?',
         'comp_feature': 'Возможность',
         'comp_mace': 'Mace Launcher',
@@ -181,12 +226,41 @@ TRANSLATIONS = {
         'comp_row4_mace': '✅ Полностью авто',
         'comp_row4_oth': '⚠️ Частично / Вручную',
 
+        # Объединенная секция
+        'comb_title': 'Безопасность, Требования и Вопросы',
         'sec_title': '100% Безопасность',
         'sec_1_title': 'Без вирусов',
         'sec_1_desc': 'Чистый инсталлятор без стороннего софта и рекламы.',
         'sec_2_title': 'Шифрование данных',
         'sec_2_desc': 'Токены авторизации и профили хранятся в зашифрованном виде.',
 
+        'sys_title': 'Системные требования',
+        'sys_os_title': 'Операционная система',
+        'sys_os_desc': 'Windows 10 / 11 (64-bit)',
+        'sys_cpu_title': 'Процессор',
+        'sys_cpu_desc': 'Intel Core i3 / AMD Ryzen 3 или лучше',
+        'sys_ram_title': 'Оперативная память',
+        'sys_ram_desc': '4 ГБ (рекомендуется 8 ГБ)',
+        'sys_java_title': 'Среда Java',
+        'sys_java_desc': 'Встроенная (Автоматическая настройка)',
+
+        'faq_title': 'Часто задаваемые вопросы',
+        'faq_q1': 'Является ли Mace Launcher бесплатным?',
+        'faq_a1': 'Да, Mace Launcher абсолютно бесплатен для всех игроков.',
+        'faq_q2': 'Поддерживает ли он моды и модлоадеры?',
+        'faq_a2': 'Конечно! Встроена полная поддержка Fabric, Forge, NeoForge и кастомных сборок.',
+        'faq_q3': 'Как выделить больше оперативной памяти игре?',
+        'faq_a3': 'Зайди в Настройки лаунчера -> Выделение памяти -> Передвинь ползунок на нужный объём ОЗУ.',
+
+        # Инструкция обновления
+        'update_modal_title': 'Инструкция по обновлению',
+        'update_step1': '1. Установите файл обновлений.',
+        'update_step2': '2. Положите файл обновления в папку updates в корневую папку Mace Launcher ("Mace Launcher\\updates").',
+        'update_step3': '3. Запустите Mace Launcher.',
+        'update_step4': '4. Следуйте инструкциям в открывшемся окне.',
+        'update_btn_download': 'Скачать файл обновления',
+
+        # Patch Notes
         'patch_title': 'История обновлений',
         'patch_v103_title': 'Версия 1.0.3 (Текущая)',
         'patch_v103_desc': 'Добавлена смена языка, расширенные настройки и полноценная работа модлоадера NeoForge.',
@@ -202,22 +276,6 @@ TRANSLATIONS = {
         'step_2_desc': 'Запусти инсталлятор и следуй простым инструкциям установки.',
         'step_3_title': '3. Играй',
         'step_3_desc': 'Выбери любимую версию или сборку модов и погружайся в игру!',
-        'sys_title': 'Системные требования',
-        'sys_os_title': 'Операционная система',
-        'sys_os_desc': 'Windows 10 / 11 (64-bit)',
-        'sys_cpu_title': 'Процессор',
-        'sys_cpu_desc': 'Intel Core i3 / AMD Ryzen 3 или лучше',
-        'sys_ram_title': 'Оперативная память',
-        'sys_ram_desc': '4 ГБ (рекомендуется 8 ГБ)',
-        'sys_java_title': 'Среда Java',
-        'sys_java_desc': 'Встроенная (Автоматическая настройка)',
-        'faq_title': 'Часто задаваемые вопросы',
-        'faq_q1': 'Является ли Mace Launcher бесплатным?',
-        'faq_a1': 'Да, Mace Launcher абсолютно бесплатен для всех игроков.',
-        'faq_q2': 'Поддерживает ли он моды и модлоадеры?',
-        'faq_a2': 'Конечно! Встроена полная поддержка Fabric, Forge, NeoForge и кастомных сборок.',
-        'faq_q3': 'Как выделить больше оперативной памяти игре?',
-        'faq_a3': 'Зайди в Настройки лаунчера -> Выделение памяти -> Передвинь ползунок на нужный объём ОЗУ.',
 
         'modal_title': 'Спасибо за скачивание!',
         'modal_desc': 'Загрузка запустится автоматически. После окончания откройте MaceInstaller.exe.',
@@ -238,7 +296,9 @@ TRANSLATIONS = {
         'theme_dark': '🌙 Темна тема',
         'hero_title': 'Mace Launcher',
         'hero_desc': 'Швидкий, зручний та потужний лаунчер Minecraft нового покоління.',
+        'downloads_count': 'Завантажень',
         'btn_download': 'Завантажити Інсталятор',
+        'btn_updates': 'Доступне оновлення',
         'btn_learn_more': 'Дізнатися більше',
         'features_title': 'Переваги лаунчера',
         'feat_1_title': '⚡ Висока швидкість',
@@ -260,16 +320,14 @@ TRANSLATIONS = {
         'custom_row3_title': 'Персоналізація',
         'custom_row3_desc': 'Завантаження власних фонів, кастомні іконки профілю та унікальні ефекти переходів.',
 
-        # Модульна сітка (imglauncher4)
+        # Модульна сітка
         'modules_title': 'Гнучка модульна сітка',
         'modules_desc': 'Перетягуйте блоки, змінюйте форму модулів та адаптуйте робочий простір під свої потреби.',
         'mod_feat_1': '✨ Перенесення блоків Drag & Drop',
         'mod_feat_2': '📐 Зміна форми та розміру',
         'mod_feat_3': '🎨 Налаштування прозорості панелей',
 
-        'mod_title': 'Інтеграція з Modrinth та Модлоадерами',
-        'mod_desc': 'Встановлення популярних завантажувачів та збірок з Modrinth в один клік.',
-
+        # Порівняння
         'comp_title': 'Чому саме Mace Launcher?',
         'comp_feature': 'Можливість',
         'comp_mace': 'Mace Launcher',
@@ -287,12 +345,41 @@ TRANSLATIONS = {
         'comp_row4_mace': '✅ Повністю авто',
         'comp_row4_oth': '⚠️ Частково / Вручную',
 
+        # Об'єднана секція
+        'comb_title': 'Безпека, Системні вимоги та Часті запитання',
         'sec_title': '100% Безпека',
         'sec_1_title': 'Без вірусів',
         'sec_1_desc': 'Чистий інсталятор без стороннього софту та реклами.',
         'sec_2_title': 'Шифрування даних',
         'sec_2_desc': 'Токени авторизації та профілі зберігаються в зашифрованому вигляді.',
 
+        'sys_title': 'Системні вимоги',
+        'sys_os_title': 'Операційна система',
+        'sys_os_desc': 'Windows 10 / 11 (64-bit)',
+        'sys_cpu_title': 'Процесор',
+        'sys_cpu_desc': 'Intel Core i3 / AMD Ryzen 3 або краще',
+        'sys_ram_title': 'Оперативна пам\'ять',
+        'sys_ram_desc': '4 ГБ (рекомендовано 8 ГБ)',
+        'sys_java_title': 'Середовище Java',
+        'sys_java_desc': 'Вбудована (Автоматичне налаштування)',
+
+        'faq_title': 'Часті запитання',
+        'faq_q1': 'Чи безкоштовний Mace Launcher?',
+        'faq_a1': 'Так, Mace Launcher на 100% безкоштовний для всіх гравців.',
+        'faq_q2': 'Чи підтримує він моди та модлоадери?',
+        'faq_a2': 'Звісно! Вбудовано повну підтримку Fabric, Forge, NeoForge та кастомних збірок.',
+        'faq_q3': 'Як виділити більше оперативної пам\'яті?',
+        'faq_a3': 'Перейди в Налаштування лаунчера -> Виділення пам\'яті -> Посунь повзунок на потрібний обсяг ОЗП.',
+
+        # Інструкція оновлення
+        'update_modal_title': 'Інструкція з оновлення',
+        'update_step1': '1. Встановіть файл оновлень.',
+        'update_step2': '2. Покладіть файл оновлення в папку updates в кореневу папку Mace Launcher ("Mace Launcher\\updates").',
+        'update_step3': '3. Запустіть Mace Launcher.',
+        'update_step4': '4. Дотримуйтесь інструкцій у вікні, що відкрилося.',
+        'update_btn_download': 'Завантажити файл оновлення',
+
+        # Patch Notes
         'patch_title': 'Історія оновлень',
         'patch_v103_title': 'Версія 1.0.3 (Поточна)',
         'patch_v103_desc': 'Додано зміну мови, розширено налаштування та підключено повноцінну роботу NeoForge.',
@@ -308,22 +395,6 @@ TRANSLATIONS = {
         'step_2_desc': 'Запусти інсталятор та дотримуйся простих підказок.',
         'step_3_title': '3. Грай',
         'step_3_desc': 'Обирай улюблену версію чи збірку модів та поринай у гру!',
-        'sys_title': 'Системні вимоги',
-        'sys_os_title': 'Операційна система',
-        'sys_os_desc': 'Windows 10 / 11 (64-bit)',
-        'sys_cpu_title': 'Процесор',
-        'sys_cpu_desc': 'Intel Core i3 / AMD Ryzen 3 або краще',
-        'sys_ram_title': 'Оперативна пам\'ять',
-        'sys_ram_desc': '4 ГБ (рекомендовано 8 ГБ)',
-        'sys_java_title': 'Середовище Java',
-        'sys_java_desc': 'Вбудована (Автоматичне налаштування)',
-        'faq_title': 'Часті запитання',
-        'faq_q1': 'Чи безкоштовний Mace Launcher?',
-        'faq_a1': 'Так, Mace Launcher на 100% безкоштовний для всіх гравців.',
-        'faq_q2': 'Чи підтримує він моди та модлоадери?',
-        'faq_a2': 'Звісно! Вбудовано повну підтримку Fabric, Forge, NeoForge та кастомних збірок.',
-        'faq_q3': 'Як виділити більше оперативної пам\'яті?',
-        'faq_a3': 'Перейди в Налаштування лаунчера -> Виділення пам\'яті -> Посунь повзунок на потрібний обсяг ОЗП.',
 
         'modal_title': 'Дякуємо за завантаження!',
         'modal_desc': 'Завантаження розпочнеться автоматично. Після завершення відкрийте MaceInstaller.exe.',
@@ -350,29 +421,105 @@ def index():
 
     css_file = 'stile-black-theme.css' if theme == 'black' else 'stile-light-theme.css'
     
+    # Отслеживаем куки пользователя
+    user_downloaded = request.cookies.get('user_downloaded') == 'true'
+    user_version = request.cookies.get('user_version', '0.0.0')
+    
+    # Нужно ли предлагать обновление? (Если юзер скачал лаунчер и его версия ниже актуальной, или актуальная)
+    show_updates_button = user_downloaded and user_version != CURRENT_VERSION
+    show_download_installer = not user_downloaded
+
+    downloads_count = get_download_count()
+
     return render_template(
         'index.html',
         css_file=css_file,
         current_theme=theme,
         current_lang=lang,
         t=TRANSLATIONS[lang],
-        languages=LANGUAGES
+        languages=LANGUAGES,
+        downloads_count=downloads_count,
+        show_download_installer=show_download_installer,
+        show_updates_button=show_updates_button,
+        current_version=CURRENT_VERSION
     )
 
 @app.route('/download/installer/<path:filename>')
 def download_installer(filename):
     installer_dir = os.path.join(app.root_path, 'Mace Installer')
-    
     file_path = os.path.join(installer_dir, filename)
     if not os.path.exists(file_path):
         return f"File not found at: {file_path}", 404
-        
-    return send_from_directory(installer_dir, filename, as_attachment=True)
+
+    increment_download_count()
+
+    response = make_response(send_from_directory(installer_dir, filename, as_attachment=True))
+    # Ставим куки юзеру
+    response.set_cookie('user_downloaded', 'true', max_age=315360000)
+    response.set_cookie('user_version', CURRENT_VERSION, max_age=315360000)
+    return response
 
 @app.route('/download/update/<path:filename>')
 def download_update(filename):
     update_dir = os.path.join(app.root_path, 'update')
-    return send_from_directory(update_dir, filename, as_attachment=True)
+    file_path = os.path.join(update_dir, filename)
+    if not os.path.exists(file_path):
+        return f"File not found at: {file_path}", 404
+
+    response = make_response(send_from_directory(update_dir, filename, as_attachment=True))
+    response.set_cookie('user_downloaded', 'true', max_age=315360000)
+    response.set_cookie('user_version', CURRENT_VERSION, max_age=315360000)
+    return response
+
+# ================= АДМИН ПАНЕЛЬ =================
+@app.route('/admin', methods=['GET', 'POST'])
+def admin_panel():
+    msg = ""
+    status_type = "info"
+    
+    if request.method == 'POST':
+        action = request.form.get('action')
+        
+        if action == 'login':
+            password = request.form.get('password', '')
+            hashed_input = hashlib.sha256(password.encode('utf-8')).hexdigest()
+            if hashed_input == ADMIN_PASSWORD_HASH:
+                session['admin_logged_in'] = True
+                msg = "Successfully logged in!"
+                status_type = "success"
+            else:
+                msg = "Invalid admin password SHA-256 hash!"
+                status_type = "error"
+
+        elif action == 'upload' and session.get('admin_logged_in'):
+            upload_type = request.form.get('upload_type') # 'installer' or 'update'
+            file = request.files.get('file')
+
+            if file and file.filename != '':
+                target_dir = os.path.join(app.root_path, 'Mace Installer') if upload_type == 'installer' else os.path.join(app.root_path, 'update')
+                os.makedirs(target_dir, exist_ok=True)
+                
+                file_path = os.path.join(target_dir, file.filename)
+                file.save(file_path)
+
+                # Push to Git
+                success, git_msg = git_push_changes(f"Admin uploaded new {upload_type}: {file.filename}")
+                if success:
+                    msg = f"File {file.filename} uploaded successfully and pushed to GitHub!"
+                    status_type = "success"
+                else:
+                    msg = f"File uploaded locally, but Git Push failed: {git_msg}"
+                    status_type = "warning"
+            else:
+                msg = "No file selected!"
+                status_type = "error"
+
+        elif action == 'logout':
+            session.pop('admin_logged_in', None)
+            return redirect(url_for('admin_panel'))
+
+    logged_in = session.get('admin_logged_in', False)
+    return render_template('admin.html', logged_in=logged_in, msg=msg, status_type=status_type)
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)

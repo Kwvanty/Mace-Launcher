@@ -17,11 +17,11 @@
             <a href="#modloaders">{{ t.nav_modloaders }}</a>
             <a href="#compare">{{ t.nav_compare }}</a>
             <a href="#updates">{{ t.nav_updates }}</a>
-            <a href="#faq">{{ t.nav_faq }}</a>
+            <a href="#combined-info">{{ t.nav_faq }}</a>
         </nav>
         
         <div class="header-controls">
-            <!-- Випадаюче меню мови -->
+            <!-- Выпадающее меню языка -->
             <div class="lang-dropdown">
                 <button class="lang-btn">
                     <span>{{ languages[current_lang].flag }}</span>
@@ -39,7 +39,7 @@
                 </div>
             </div>
 
-            <!-- Перемикач теми -->
+            <!-- Переключатель темы -->
             <div class="theme-toggle">
                 {% if current_theme == 'black' %}
                     <a href="/?theme=light&lang={{ current_lang }}" class="btn-theme">{{ t.theme_light }}</a>
@@ -54,8 +54,19 @@
         <div class="hero-content animate-fade-up">
             <h1>{{ t.hero_title }}</h1>
             <p>{{ t.hero_desc }}</p>
+            <div class="download-counter-badge">
+                📥 {{ t.downloads_count }}: <strong>{{ downloads_count }}</strong>
+            </div>
+            
             <div class="cta-buttons">
-                <a href="/download/installer/MaceInstaller.exe" onclick="showDownloadModal(event)" class="btn btn-primary pulse-hover">{{ t.btn_download }}</a>
+                {% if show_download_installer %}
+                    <a href="/download/installer/MaceInstaller.exe" onclick="showDownloadModal(event)" class="btn btn-primary pulse-hover">{{ t.btn_download }}</a>
+                {% endif %}
+                
+                {% if show_updates_button %}
+                    <button onclick="openUpdateModal()" class="btn btn-update pulse-hover">🔄 {{ t.btn_updates }}</button>
+                {% endif %}
+                
                 <a href="#features" class="btn btn-secondary">{{ t.btn_learn_more }}</a>
             </div>
 
@@ -66,7 +77,7 @@
         </div>
     </main>
 
-    <!-- Особливості -->
+    <!-- Особенности -->
     <section id="features" class="features-section">
         <h2 class="animate-fade-up">{{ t.features_title }}</h2>
         <div class="cards-grid">
@@ -90,9 +101,7 @@
         <h2 class="text-center">{{ t.custom_title }}</h2>
         <p class="section-desc text-center">{{ t.custom_desc }}</p>
 
-        <!-- Двоколоночний макет: Зліва таблиця, Справа 3D-картки -->
         <div class="customization-split">
-            <!-- Зліва табличка -->
             <div class="custom-table-col">
                 <div class="table-wrapper">
                     <table class="compare-table">
@@ -120,14 +129,13 @@
                 </div>
             </div>
 
-            <!-- Справа 3D Галерея скріншотів -->
             <div class="custom-showcase-container">
                 <img id="imgCustom2" src="{{ url_for('static', filename='images/imglauncher2.png') }}" alt="Customization Preview 2" class="custom-card front">
                 <img id="imgCustom3" src="{{ url_for('static', filename='images/imglauncher3.png') }}" alt="Customization Preview 3" class="custom-card back">
             </div>
         </div>
 
-        <!-- Модульна сітка (imglauncher4) -->
+        <!-- Модульная сетка -->
         <div class="modules-showcase-container">
             <div class="modules-info">
                 <h3>{{ t.modules_title }}</h3>
@@ -144,20 +152,7 @@
         </div>
     </section>
 
-    <!-- Модлоадери -->
-    <section id="modloaders" class="section-container text-center">
-        <h2>{{ t.mod_title }}</h2>
-        <p class="section-desc">{{ t.mod_desc }}</p>
-        <div class="mod-badges">
-            <div class="mod-badge">Fabric</div>
-            <div class="mod-badge">Forge</div>
-            <div class="mod-badge">NeoForge</div>
-            <div class="mod-badge">Quilt</div>
-            <div class="mod-badge highlight">Modrinth API</div>
-        </div>
-    </section>
-
-    <!-- Порівняльна таблиця -->
+    <!-- Сравнительная таблица -->
     <section id="compare" class="section-container alt-bg">
         <h2>{{ t.comp_title }}</h2>
         <div class="table-wrapper">
@@ -195,23 +190,8 @@
         </div>
     </section>
 
-    <!-- Безпека -->
-    <section class="section-container">
-        <h2>{{ t.sec_title }}</h2>
-        <div class="cards-grid">
-            <div class="card">
-                <h3>🛡️ {{ t.sec_1_title }}</h3>
-                <p>{{ t.sec_1_desc }}</p>
-            </div>
-            <div class="card">
-                <h3>🔒 {{ t.sec_2_title }}</h3>
-                <p>{{ t.sec_2_desc }}</p>
-            </div>
-        </div>
-    </section>
-
-    <!-- Оновлення (Patch Notes) -->
-    <section id="updates" class="section-container alt-bg">
+    <!-- Обновления (Patch Notes) -->
+    <section id="updates" class="section-container">
         <h2>{{ t.patch_title }}</h2>
         <div class="timeline">
             <div class="timeline-item">
@@ -238,8 +218,8 @@
         </div>
     </section>
 
-    <!-- Кроки для старту -->
-    <section id="how-to-start" class="section-container">
+    <!-- Шаги для старта -->
+    <section id="how-to-start" class="section-container alt-bg">
         <h2>{{ t.how_title }}</h2>
         <div class="steps-grid">
             <div class="step-card">
@@ -260,45 +240,67 @@
         </div>
     </section>
 
-    <!-- Системні вимоги -->
-    <section id="sys-req" class="section-container alt-bg">
-        <h2>{{ t.sys_title }}</h2>
-        <div class="sys-grid">
-            <div class="sys-item">
-                <span class="sys-label">{{ t.sys_os_title }}</span>
-                <span class="sys-val">{{ t.sys_os_desc }}</span>
+    <!-- ОБЪЕДИНЕННАЯ ОДНОКОЛОНОЧНАЯ СЕКЦИЯ: Safe & Secure, System Requirements, FAQ -->
+    <section id="combined-info" class="section-container">
+        <h2 class="text-center">{{ t.comb_title }}</h2>
+        
+        <div class="single-column-wrapper">
+            <!-- 1. Safe & Secure -->
+            <div class="combined-block">
+                <h3>🛡️ {{ t.sec_title }}</h3>
+                <div class="cards-grid">
+                    <div class="card">
+                        <h4>{{ t.sec_1_title }}</h4>
+                        <p>{{ t.sec_1_desc }}</p>
+                    </div>
+                    <div class="card">
+                        <h4>{{ t.sec_2_title }}</h4>
+                        <p>{{ t.sec_2_desc }}</p>
+                    </div>
+                </div>
             </div>
-            <div class="sys-item">
-                <span class="sys-label">{{ t.sys_cpu_title }}</span>
-                <span class="sys-val">{{ t.sys_cpu_desc }}</span>
-            </div>
-            <div class="sys-item">
-                <span class="sys-label">{{ t.sys_ram_title }}</span>
-                <span class="sys-val">{{ t.sys_ram_desc }}</span>
-            </div>
-            <div class="sys-item">
-                <span class="sys-label">{{ t.sys_java_title }}</span>
-                <span class="sys-val">{{ t.sys_java_desc }}</span>
-            </div>
-        </div>
-    </section>
 
-    <!-- FAQ -->
-    <section id="faq" class="section-container">
-        <h2>{{ t.faq_title }}</h2>
-        <div class="faq-accordion">
-            <details class="faq-item">
-                <summary class="faq-question">{{ t.faq_q1 }}</summary>
-                <div class="faq-answer"><p>{{ t.faq_a1 }}</p></div>
-            </details>
-            <details class="faq-item">
-                <summary class="faq-question">{{ t.faq_q2 }}</summary>
-                <div class="faq-answer"><p>{{ t.faq_a2 }}</p></div>
-            </details>
-            <details class="faq-item">
-                <summary class="faq-question">{{ t.faq_q3 }}</summary>
-                <div class="faq-answer"><p>{{ t.faq_a3 }}</p></div>
-            </details>
+            <!-- 2. System Requirements -->
+            <div class="combined-block">
+                <h3>💻 {{ t.sys_title }}</h3>
+                <div class="sys-grid">
+                    <div class="sys-item">
+                        <span class="sys-label">{{ t.sys_os_title }}</span>
+                        <span class="sys-val">{{ t.sys_os_desc }}</span>
+                    </div>
+                    <div class="sys-item">
+                        <span class="sys-label">{{ t.sys_cpu_title }}</span>
+                        <span class="sys-val">{{ t.sys_cpu_desc }}</span>
+                    </div>
+                    <div class="sys-item">
+                        <span class="sys-label">{{ t.sys_ram_title }}</span>
+                        <span class="sys-val">{{ t.sys_ram_desc }}</span>
+                    </div>
+                    <div class="sys-item">
+                        <span class="sys-label">{{ t.sys_java_title }}</span>
+                        <span class="sys-val">{{ t.sys_java_desc }}</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 3. FAQ -->
+            <div class="combined-block">
+                <h3>❓ {{ t.faq_title }}</h3>
+                <div class="faq-accordion">
+                    <details class="faq-item">
+                        <summary class="faq-question">{{ t.faq_q1 }}</summary>
+                        <div class="faq-answer"><p>{{ t.faq_a1 }}</p></div>
+                    </details>
+                    <details class="faq-item">
+                        <summary class="faq-question">{{ t.faq_q2 }}</summary>
+                        <div class="faq-answer"><p>{{ t.faq_a2 }}</p></div>
+                    </details>
+                    <details class="faq-item">
+                        <summary class="faq-question">{{ t.faq_q3 }}</summary>
+                        <div class="faq-answer"><p>{{ t.faq_a3 }}</p></div>
+                    </details>
+                </div>
+            </div>
         </div>
     </section>
 
@@ -312,12 +314,33 @@
         </div>
     </footer>
 
-    <!-- Модальне вікно завантаження -->
+    <!-- Модальное окно загрузки -->
     <div id="downloadModal" class="modal-backdrop">
         <div class="modal-box">
             <h3>🎉 {{ t.modal_title }}</h3>
             <p>{{ t.modal_desc }}</p>
             <button class="btn btn-primary" onclick="closeDownloadModal()">{{ t.modal_close }}</button>
+        </div>
+    </div>
+
+    <!-- Модальное окно обновления -->
+    <div id="updateModal" class="modal-backdrop">
+        <div class="modal-box update-modal-box">
+            <h3>🚀 {{ t.update_modal_title }} (v{{ current_version }})</h3>
+            <div class="update-instructions">
+                <p>{{ t.update_step1 }}</p>
+                <p>{{ t.update_step2 }}</p>
+                <p>{{ t.update_step3 }}</p>
+                <p>{{ t.update_step4 }}</p>
+            </div>
+            <div class="update-info-box">
+                <h4>{{ t.patch_v103_title }}</h4>
+                <p>{{ t.patch_v103_desc }}</p>
+            </div>
+            <div class="modal-buttons">
+                <a href="/download/update/MaceUpdate.zip" class="btn btn-primary">{{ t.update_btn_download }}</a>
+                <button class="btn btn-secondary" onclick="closeUpdateModal()">{{ t.modal_close }}</button>
+            </div>
         </div>
     </div>
 
@@ -334,9 +357,18 @@
 
         function closeDownloadModal() {
             document.getElementById('downloadModal').classList.remove('active');
+            location.reload();
         }
 
-        // Логіка зміни скрінів кастомізації (7 секунд)
+        function openUpdateModal() {
+            document.getElementById('updateModal').classList.add('active');
+        }
+
+        function closeUpdateModal() {
+            document.getElementById('updateModal').classList.remove('active');
+        }
+
+        // Логика смены скринов кастомизации (7 секунд)
         const img2 = document.getElementById('imgCustom2');
         const img3 = document.getElementById('imgCustom3');
 
