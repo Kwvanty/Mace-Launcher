@@ -1,3 +1,4 @@
 *.bin filter=lfs diff=lfs merge=lfs -text
 *.exe filter=lfs diff=lfs merge=lfs -text
 MaceInstaller.exe filter=lfs diff=lfs merge=lfs -text
+Mace[[:space:]]Installer/MaceInstaller.exe filter=lfs diff=lfs merge=lfs -text
