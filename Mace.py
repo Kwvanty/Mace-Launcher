@@ -36,8 +36,21 @@ def increment_download_count():
 
 def git_push_changes(commit_message):
     try:
-        subprocess.run(["git", "add", "."], check=True)
-        subprocess.run(["git", "commit", "-m", commit_message], check=True)
+        # Индексируем абсолютно все файлы
+        subprocess.run(["git", "add", "-A"], check=True)
+
+        # Проверяем, есть ли что коммитить, чтобы избежать ошибки незафиксированных изменений
+        status = subprocess.run(["git", "status", "--porcelain"], capture_output=True, text=True)
+        if not status.stdout.strip():
+            return True, "No changes detected to commit."
+
+        # Выполняем коммит с указанием имени и email
+        subprocess.run([
+            "git", "-c", "user.name=Kwvanty", "-c", "user.email=kwvanty7@example.com", 
+            "commit", "-m", commit_message
+        ], check=True)
+
+        # Отправка изменений
         subprocess.run(["git", "push", GIT_REPO_URL, "HEAD:main"], check=True)
         return True, "Successfully pushed to GitHub!"
     except Exception as e:
