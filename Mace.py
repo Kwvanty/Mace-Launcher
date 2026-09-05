@@ -47,7 +47,7 @@ def init_db():
                     pass
             cursor.execute('INSERT INTO downloads (id, count) VALUES (1, ?)', (count,))
         
-        # Створюємо таблицю Mace для оновлений, як ти і просив
+        # Створюємо таблицю Mace для оновлень
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS Mace (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -99,7 +99,6 @@ def git_push_changes(commit_message):
             "commit", "-m", commit_message
         ], check=True)
 
-        # Використовуємо стандартний push (якщо налаштований ключ/credential helper) або ловимо помилку 128
         subprocess.run(["git", "push", "origin", "HEAD:main"], check=True)
         return True, "Successfully pushed to GitHub!"
     except Exception as e:
@@ -160,7 +159,7 @@ TRANSLATIONS = {
         'comp_row2_oth': '❌ Missing',
         'comp_row3': 'Modrinth & Modpacks API',
         'comp_row3_mace': '✅ Direct Search & Install',
-        'comp_row3_oth': '⚠️ Partial / Manual',
+        'comp_row3_oth': '❌ Manual Installation',
         'comp_row4': 'Automatic Java Setup',
         'comp_row4_mace': '✅ Full Auto',
         'comp_row4_oth': '⚠️ Partial / Manual',
@@ -269,7 +268,7 @@ TRANSLATIONS = {
         'comp_row2_oth': '❌ Отсутствует',
         'comp_row3': 'Поиск по Modrinth API',
         'comp_row3_mace': '✅ Прямо в лаунчере',
-        'comp_row3_oth': '⚠️ Частично / Вручную',
+        'comp_row3_oth': '❌ Ручная установка',
         'comp_row4': 'Автонастройка Java',
         'comp_row4_mace': '✅ Полностью авто',
         'comp_row4_oth': '⚠️ Частично / Вручную',
@@ -378,7 +377,7 @@ TRANSLATIONS = {
         'comp_row2_oth': '❌ Відсутня',
         'comp_row3': 'Пошук по Modrinth API',
         'comp_row3_mace': '✅ Прямо в лаунчері',
-        'comp_row3_oth': '⚠️ Частково / Вручную',
+        'comp_row3_oth': '❌ Ручне встановлення',
         'comp_row4': 'Автоналаштування Java',
         'comp_row4_mace': '✅ Повністю авто',
         'comp_row4_oth': '⚠️ Частково / Вручную',
@@ -461,8 +460,8 @@ def index():
     user_downloaded = request.cookies.get('user_downloaded') == 'true'
     user_version = request.cookies.get('user_version', '0.0.0')
     
+    # Кнопка оновлення показується тільки якщо користувач вже скачував і його версія відрізняється від актуальної
     show_updates_button = user_downloaded and user_version != current_version
-    show_download_installer = not user_downloaded
     downloads_count = get_download_count()
 
     return render_template(
@@ -473,7 +472,6 @@ def index():
         t=TRANSLATIONS[lang],
         languages=LANGUAGES,
         downloads_count=downloads_count,
-        show_download_installer=show_download_installer,
         show_updates_button=show_updates_button,
         current_version=current_version,
         updates=updates
@@ -555,19 +553,16 @@ def admin_panel():
             desc_uk = request.form.get('desc_uk', '').strip()
 
             if version and desc_en and desc_ru and desc_uk:
-                # 1. Записуємо в таблицю Mace обов'язково
                 db = get_db()
                 db.execute('INSERT INTO Mace (version, desc_en, desc_ru, desc_uk) VALUES (?, ?, ?, ?)', 
                            (version, desc_en, desc_ru, desc_uk))
                 db.commit()
 
-                # 2. Пробуємо зробити Git Push
                 success, git_msg = git_push_changes(f"Admin added update patch v{version} to history")
                 if success:
                     msg = f"Update v{version} added successfully to Mace table and pushed to GitHub!"
                     status_type = "success"
                 else:
-                    # Дані вже в базі, але гіт ругається на статус 128 (авторизація/ключ)
                     msg = f"Update saved to Mace.db successfully, but Git push failed: {git_msg}"
                     status_type = "warning"
             else:
