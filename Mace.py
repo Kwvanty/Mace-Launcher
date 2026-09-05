@@ -39,7 +39,6 @@ def init_db():
         cursor.execute('SELECT count FROM downloads WHERE id = 1')
         if not cursor.fetchone():
             count = 0
-            # Переносимо зі старого файлу, якщо він є
             if os.path.exists("downloads.txt"):
                 try:
                     with open("downloads.txt", 'r', encoding='utf-8') as f:
@@ -48,9 +47,9 @@ def init_db():
                     pass
             cursor.execute('INSERT INTO downloads (id, count) VALUES (1, ?)', (count,))
         
-        # Таблиця для історії оновлень
+        # Створюємо таблицю Mace для оновлений, як ти і просив
         cursor.execute('''
-            CREATE TABLE IF NOT EXISTS updates (
+            CREATE TABLE IF NOT EXISTS Mace (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 version TEXT,
                 desc_en TEXT,
@@ -58,20 +57,17 @@ def init_db():
                 desc_uk TEXT
             )
         ''')
-        cursor.execute('SELECT COUNT(*) FROM updates')
+        cursor.execute('SELECT COUNT(*) FROM Mace')
         if cursor.fetchone()[0] == 0:
-            # Стартові записи, якщо таблиця порожня
             initial_updates = [
                 ('1.0.1', 'Optimized resource caching, accelerated asset downloading, and fixed UI elements.', 'Оптимизировано кэширование, ускорена загрузка файлов и улучшен интерфейс.', 'Оптимізовано кешування, прискорено завантаження файлів та покращено інтерфейс.'),
                 ('1.0.2', 'Added Modrinth API search and hardware telemetry monitor.', 'Добавлен поиск Modrinth API и мониторинг железных ресурсов.', 'Додано пошук Modrinth API та моніторинг апаратних ресурсів.'),
                 ('1.0.3', 'Added language switching, expanded settings options, and fully integrated NeoForge modloader support.', 'Добавлена смена языка, расширенные настройки и полноценная работа модлоадера NeoForge.', 'Додано зміну мови, розширено налаштування та підключено повноцінну роботу NeoForge.')
             ]
-            cursor.executemany('INSERT INTO updates (version, desc_en, desc_ru, desc_uk) VALUES (?, ?, ?, ?)', initial_updates)
+            cursor.executemany('INSERT INTO Mace (version, desc_en, desc_ru, desc_uk) VALUES (?, ?, ?, ?)', initial_updates)
         db.commit()
 
-# Ініціалізуємо БД при старті
-with app.app_context():
-    init_db()
+init_db()
 
 def get_download_count():
     db = get_db()
@@ -87,7 +83,7 @@ def increment_download_count():
 
 def get_latest_version():
     db = get_db()
-    cur = db.execute('SELECT version FROM updates ORDER BY id DESC LIMIT 1')
+    cur = db.execute('SELECT version FROM Mace ORDER BY id DESC LIMIT 1')
     row = cur.fetchone()
     return row['version'] if row else "0.0.0"
 
@@ -103,12 +99,13 @@ def git_push_changes(commit_message):
             "commit", "-m", commit_message
         ], check=True)
 
-        subprocess.run(["git", "push", GIT_REPO_URL, "HEAD:main"], check=True)
+        # Використовуємо стандартний push (якщо налаштований ключ/credential helper) або ловимо помилку 128
+        subprocess.run(["git", "push", "origin", "HEAD:main"], check=True)
         return True, "Successfully pushed to GitHub!"
     except Exception as e:
-        return False, f"Git push error: {str(e)}"
+        return False, f"Git push error (Code 128 - check SSH/Token auth): {str(e)}"
 
-# ================= ПЕРЕКЛАДИ (Динамічні патчі вилучено) =================
+# ================= ПЕРЕКЛАДИ =================
 TRANSLATIONS = {
     'en': {
         'title': 'Mace Launcher',
@@ -419,7 +416,7 @@ TRANSLATIONS = {
         'update_btn_download': 'Завантажити файл оновлення',
 
         'patch_title': 'Історія оновлень',
-        'patch_title_prefix': 'Версія',
+        'patch_title_prefix': 'Версия',
         'patch_current': '(Поточна)',
 
         'how_title': 'Як почати грати за 3 кроки',
@@ -455,9 +452,8 @@ def index():
 
     css_file = 'stile-black-theme.css' if theme == 'black' else 'stile-light-theme.css'
     
-    # Витягуємо всі оновлення з бази даних для відображення
     db = get_db()
-    cur = db.execute('SELECT * FROM updates ORDER BY id DESC')
+    cur = db.execute('SELECT * FROM Mace ORDER BY id DESC')
     updates = cur.fetchall()
     
     current_version = get_latest_version()
@@ -480,7 +476,7 @@ def index():
         show_download_installer=show_download_installer,
         show_updates_button=show_updates_button,
         current_version=current_version,
-        updates=updates # Передаємо масив оновлень у шаблон
+        updates=updates
     )
 
 @app.route('/download/installer/<path:filename>')
@@ -559,18 +555,20 @@ def admin_panel():
             desc_uk = request.form.get('desc_uk', '').strip()
 
             if version and desc_en and desc_ru and desc_uk:
-                # Зберігаємо оновлення прямо в базу даних!
+                # 1. Записуємо в таблицю Mace обов'язково
                 db = get_db()
-                db.execute('INSERT INTO updates (version, desc_en, desc_ru, desc_uk) VALUES (?, ?, ?, ?)', 
+                db.execute('INSERT INTO Mace (version, desc_en, desc_ru, desc_uk) VALUES (?, ?, ?, ?)', 
                            (version, desc_en, desc_ru, desc_uk))
                 db.commit()
 
+                # 2. Пробуємо зробити Git Push
                 success, git_msg = git_push_changes(f"Admin added update patch v{version} to history")
                 if success:
-                    msg = f"Update v{version} added successfully to patch notes and pushed to GitHub!"
+                    msg = f"Update v{version} added successfully to Mace table and pushed to GitHub!"
                     status_type = "success"
                 else:
-                    msg = f"Update added locally, but Git push failed: {git_msg}"
+                    # Дані вже в базі, але гіт ругається на статус 128 (авторизація/ключ)
+                    msg = f"Update saved to Mace.db successfully, but Git push failed: {git_msg}"
                     status_type = "warning"
             else:
                 msg = "Please fill in all version and description fields!"
