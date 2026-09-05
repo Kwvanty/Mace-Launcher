@@ -57,9 +57,7 @@
             </div>
             
             <div class="cta-buttons">
-                {% if show_download_installer %}
-                    <a href="/download/installer/MaceInstaller.exe" onclick="showDownloadModal(event)" class="btn btn-primary pulse-hover">{{ t.btn_download }}</a>
-                {% endif %}
+                <a href="/download/installer/MaceInstaller.exe" onclick="showDownloadModal(event)" class="btn btn-primary pulse-hover">{{ t.btn_download }}</a>
                 
                 {% if show_updates_button %}
                     <button onclick="openUpdateModal()" class="btn btn-update pulse-hover">🔄 {{ t.btn_updates }}</button>
@@ -183,7 +181,6 @@
         </div>
     </section>
 
-    <!-- Обновления теперь грузятся из Базы Данных автоматически -->
     <section id="updates" class="section-container">
         <h2>{{ t.patch_title }}</h2>
         <div class="timeline">
@@ -300,7 +297,6 @@
         </div>
     </div>
 
-    <!-- Модальне вікно теж тепер підтягує актуальну версію -->
     <div id="updateModal" class="modal-backdrop">
         <div class="modal-box update-modal-box">
             <h3>🚀 {{ t.update_modal_title }} (v{{ current_version }})</h3>
