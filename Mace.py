@@ -1,7 +1,8 @@
 import os
 import hashlib
 import subprocess
-from flask import Flask, render_template, send_from_directory, request, redirect, url_for, session, make_response
+import sqlite3
+from flask import Flask, render_template, send_from_directory, request, redirect, url_for, session, make_response, g
 
 app = Flask(
     __name__,
@@ -10,52 +11,104 @@ app = Flask(
 )
 app.secret_key = 'mace_launcher_super_secret_key_change_me'
 
-
 ADMIN_PASSWORD_HASH = "1b24fbfacd5b57d04c0b955d4440299abca943cc36aed243bb0523571e2c8cd6"
-
-# Текущая актуальная версия лаунчера
-CURRENT_VERSION = "1.0.3"
-DOWNLOADS_FILE = "downloads.txt"
-
 GIT_REPO_URL = "https://github.com/Kwvanty/Mace-Launcher.git"
+DATABASE = 'mace.db'
+
+# ================= РОБОТА З БАЗОЮ ДАНИХ =================
+def get_db():
+    db = getattr(g, '_database', None)
+    if db is None:
+        db = g._database = sqlite3.connect(DATABASE)
+        db.row_factory = sqlite3.Row
+    return db
+
+@app.teardown_appcontext
+def close_connection(exception):
+    db = getattr(g, '_database', None)
+    if db is not None:
+        db.close()
+
+def init_db():
+    with app.app_context():
+        db = get_db()
+        cursor = db.cursor()
+        
+        # Таблиця для скачувань
+        cursor.execute('CREATE TABLE IF NOT EXISTS downloads (id INTEGER PRIMARY KEY, count INTEGER)')
+        cursor.execute('SELECT count FROM downloads WHERE id = 1')
+        if not cursor.fetchone():
+            count = 0
+            # Переносимо зі старого файлу, якщо він є
+            if os.path.exists("downloads.txt"):
+                try:
+                    with open("downloads.txt", 'r', encoding='utf-8') as f:
+                        count = int(f.read().strip())
+                except Exception:
+                    pass
+            cursor.execute('INSERT INTO downloads (id, count) VALUES (1, ?)', (count,))
+        
+        # Таблиця для історії оновлень
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS updates (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                version TEXT,
+                desc_en TEXT,
+                desc_ru TEXT,
+                desc_uk TEXT
+            )
+        ''')
+        cursor.execute('SELECT COUNT(*) FROM updates')
+        if cursor.fetchone()[0] == 0:
+            # Стартові записи, якщо таблиця порожня
+            initial_updates = [
+                ('1.0.1', 'Optimized resource caching, accelerated asset downloading, and fixed UI elements.', 'Оптимизировано кэширование, ускорена загрузка файлов и улучшен интерфейс.', 'Оптимізовано кешування, прискорено завантаження файлів та покращено інтерфейс.'),
+                ('1.0.2', 'Added Modrinth API search and hardware telemetry monitor.', 'Добавлен поиск Modrinth API и мониторинг железных ресурсов.', 'Додано пошук Modrinth API та моніторинг апаратних ресурсів.'),
+                ('1.0.3', 'Added language switching, expanded settings options, and fully integrated NeoForge modloader support.', 'Добавлена смена языка, расширенные настройки и полноценная работа модлоадера NeoForge.', 'Додано зміну мови, розширено налаштування та підключено повноцінну роботу NeoForge.')
+            ]
+            cursor.executemany('INSERT INTO updates (version, desc_en, desc_ru, desc_uk) VALUES (?, ?, ?, ?)', initial_updates)
+        db.commit()
+
+# Ініціалізуємо БД при старті
+with app.app_context():
+    init_db()
 
 def get_download_count():
-    if not os.path.exists(DOWNLOADS_FILE):
-        return 0
-    try:
-        with open(DOWNLOADS_FILE, 'r', encoding='utf-8') as f:
-            return int(f.read().strip())
-    except Exception:
-        return 0
+    db = get_db()
+    cur = db.execute('SELECT count FROM downloads WHERE id = 1')
+    row = cur.fetchone()
+    return row['count'] if row else 0
 
 def increment_download_count():
-    count = get_download_count() + 1
-    with open(DOWNLOADS_FILE, 'w', encoding='utf-8') as f:
-        f.write(str(count))
-    return count
+    db = get_db()
+    db.execute('UPDATE downloads SET count = count + 1 WHERE id = 1')
+    db.commit()
+    return get_download_count()
+
+def get_latest_version():
+    db = get_db()
+    cur = db.execute('SELECT version FROM updates ORDER BY id DESC LIMIT 1')
+    row = cur.fetchone()
+    return row['version'] if row else "0.0.0"
 
 def git_push_changes(commit_message):
     try:
-        # Индексируем абсолютно все файлы
         subprocess.run(["git", "add", "-A"], check=True)
-
-        # Проверяем, есть ли что коммитить, чтобы избежать ошибки незафиксированных изменений
         status = subprocess.run(["git", "status", "--porcelain"], capture_output=True, text=True)
         if not status.stdout.strip():
             return True, "No changes detected to commit."
 
-        # Выполняем коммит с указанием имени и email
         subprocess.run([
             "git", "-c", "user.name=Kwvanty", "-c", "user.email=kwvanty7@example.com", 
             "commit", "-m", commit_message
         ], check=True)
 
-        # Отправка изменений
         subprocess.run(["git", "push", GIT_REPO_URL, "HEAD:main"], check=True)
         return True, "Successfully pushed to GitHub!"
     except Exception as e:
         return False, f"Git push error: {str(e)}"
 
+# ================= ПЕРЕКЛАДИ (Динамічні патчі вилучено) =================
 TRANSLATIONS = {
     'en': {
         'title': 'Mace Launcher',
@@ -81,7 +134,6 @@ TRANSLATIONS = {
         'feat_3_title': '🛡️ Reliability',
         'feat_3_desc': 'Stable updates and total security for your data.',
         
-        # Customization Section
         'custom_title': 'FULL CUSTOMIZATION',
         'custom_desc': 'Customize every pixel of your launcher for maximum comfort and style.',
         'custom_th_param': 'Option',
@@ -93,14 +145,12 @@ TRANSLATIONS = {
         'custom_row3_title': 'Personalization',
         'custom_row3_desc': 'Custom avatar frames, animated profile cards, and unique launch sounds.',
 
-        # Module Layout Section
         'modules_title': 'Flexible Modular Interface',
         'modules_desc': 'Rearrange modules, change panel forms, and set up your perfect layout drag-and-drop style.',
         'mod_feat_1': '✨ Drag & Drop placement',
         'mod_feat_2': '📐 Resizable panel shapes',
         'mod_feat_3': '🎨 Module background opacity',
 
-        # Comparison Table
         'comp_title': 'Why Choose Mace Launcher?',
         'comp_feature': 'Feature',
         'comp_mace': 'Mace Launcher',
@@ -118,7 +168,6 @@ TRANSLATIONS = {
         'comp_row4_mace': '✅ Full Auto',
         'comp_row4_oth': '⚠️ Partial / Manual',
 
-        # Combined Section
         'comb_title': 'Security, System Requirements & FAQ',
         'sec_title': '100% Safe & Secure',
         'sec_1_title': 'No Malware',
@@ -144,7 +193,6 @@ TRANSLATIONS = {
         'faq_q3': 'How do I allocate more RAM to the game?',
         'faq_a3': 'Open Launcher Settings -> Memory allocation -> Drag the slider to your desired RAM amount.',
 
-        # Updates Modal & Instructions
         'update_modal_title': 'Update Instructions',
         'update_step1': '1. Download the update file below.',
         'update_step2': '2. Place the downloaded file into the "updates" folder inside your Mace Launcher directory ("Mace Launcher\\updates").',
@@ -152,16 +200,10 @@ TRANSLATIONS = {
         'update_step4': '4. Follow the instructions in the opened launcher window.',
         'update_btn_download': 'Download Update File',
 
-        # Patch Notes
         'patch_title': 'Recent Updates & Timeline',
-        'patch_v103_title': 'Version 1.0.3 (Current)',
-        'patch_v103_desc': 'Added language switching, expanded settings options, and fully integrated NeoForge modloader support.',
-        'patch_v102_title': 'Version 1.0.2',
-        'patch_v102_desc': 'Added Modrinth API search and hardware telemetry monitor.',
-        'patch_v101_title': 'Version 1.0.1',
-        'patch_v101_desc': 'Optimized resource caching, accelerated asset downloading, and fixed UI elements.',
+        'patch_title_prefix': 'Version',
+        'patch_current': '(Current)',
 
-        # How to start
         'how_title': 'How to Start Playing in 3 Steps',
         'step_1_title': '1. Download',
         'step_1_desc': 'Get the official MaceInstaller.exe by clicking the button above.',
@@ -170,7 +212,6 @@ TRANSLATIONS = {
         'step_3_title': '3. Play',
         'step_3_desc': 'Choose your favorite version or modpack and jump right into the game!',
         
-        # Modal & Footer
         'modal_title': 'Thank you for downloading!',
         'modal_desc': 'Your download should start automatically. Open MaceInstaller.exe once complete.',
         'modal_close': 'Got it',
@@ -202,7 +243,6 @@ TRANSLATIONS = {
         'feat_3_title': '🛡️ Надёжность',
         'feat_3_desc': 'Стабильные обновления и полная безопасность ваших данных.',
 
-        # Секция Кастомизации
         'custom_title': 'ПОЛНАЯ КАСТОМИЗАЦИЯ',
         'custom_desc': 'Настраивайте каждый пиксель лаунчера под свой стиль и удобство.',
         'custom_th_param': 'Параметр',
@@ -214,14 +254,12 @@ TRANSLATIONS = {
         'custom_row3_title': 'Персонализация',
         'custom_row3_desc': 'Загрузка собственных фонов, кастомные иконки профиля и уникальные эффекты переходов.',
 
-        # Модульная сетка
         'modules_title': 'Гибкая модульная сетка',
         'modules_desc': 'Перетаскивайте блоки, изменяйте форму модулей и адаптируйте рабочий экран под свои задачи.',
         'mod_feat_1': '✨ Перенос блоков Drag & Drop',
         'mod_feat_2': '📐 Изменение формы и размера',
         'mod_feat_3': '🎨 Настройка прозрачности панелей',
 
-        # Сравнение
         'comp_title': 'Почему именно Mace Launcher?',
         'comp_feature': 'Возможность',
         'comp_mace': 'Mace Launcher',
@@ -239,7 +277,6 @@ TRANSLATIONS = {
         'comp_row4_mace': '✅ Полностью авто',
         'comp_row4_oth': '⚠️ Частично / Вручную',
 
-        # Объединенная секция
         'comb_title': 'Безопасность, Требования и Вопросы',
         'sec_title': '100% Безопасность',
         'sec_1_title': 'Без вирусов',
@@ -265,7 +302,6 @@ TRANSLATIONS = {
         'faq_q3': 'Как выделить больше оперативной памяти игре?',
         'faq_a3': 'Зайди в Настройки лаунчера -> Выделение памяти -> Передвинь ползунок на нужный объём ОЗУ.',
 
-        # Инструкция обновления
         'update_modal_title': 'Инструкция по обновлению',
         'update_step1': '1. Установите файл обновлений.',
         'update_step2': '2. Положите файл обновления в папку updates в корневую папку Mace Launcher ("Mace Launcher\\updates").',
@@ -273,14 +309,9 @@ TRANSLATIONS = {
         'update_step4': '4. Следуйте инструкциям в открывшемся окне.',
         'update_btn_download': 'Скачать файл обновления',
 
-        # Patch Notes
         'patch_title': 'История обновлений',
-        'patch_v103_title': 'Версия 1.0.3 (Текущая)',
-        'patch_v103_desc': 'Добавлена смена языка, расширенные настройки и полноценная работа модлоадера NeoForge.',
-        'patch_v102_title': 'Версия 1.0.2',
-        'patch_v102_desc': 'Добавлен поиск Modrinth API и мониторинг железных ресурсов.',
-        'patch_v101_title': 'Версия 1.0.1',
-        'patch_v101_desc': 'Оптимизировано кэширование, ускорена загрузка файлов и улучшен интерфейс.',
+        'patch_title_prefix': 'Версия',
+        'patch_current': '(Текущая)',
 
         'how_title': 'Как начать играть за 3 шага',
         'step_1_title': '1. Скачай',
@@ -321,7 +352,6 @@ TRANSLATIONS = {
         'feat_3_title': '🛡️ Надійність',
         'feat_3_desc': 'Стабільні оновлення та повна безпека ваших даних.',
 
-        # Секція Кастомізації
         'custom_title': 'ПОВНА КАСТОМІЗАЦІЯ',
         'custom_desc': 'Налаштовуйте кожен піксель лаунчера під свій стиль та зручність.',
         'custom_th_param': 'Параметр',
@@ -333,14 +363,12 @@ TRANSLATIONS = {
         'custom_row3_title': 'Персоналізація',
         'custom_row3_desc': 'Завантаження власних фонів, кастомні іконки профілю та унікальні ефекти переходів.',
 
-        # Модульна сітка
         'modules_title': 'Гнучка модульна сітка',
         'modules_desc': 'Перетягуйте блоки, змінюйте форму модулів та адаптуйте робочий простір під свої потреби.',
         'mod_feat_1': '✨ Перенесення блоків Drag & Drop',
         'mod_feat_2': '📐 Зміна форми та розміру',
         'mod_feat_3': '🎨 Налаштування прозорості панелей',
 
-        # Порівняння
         'comp_title': 'Чому саме Mace Launcher?',
         'comp_feature': 'Можливість',
         'comp_mace': 'Mace Launcher',
@@ -358,7 +386,6 @@ TRANSLATIONS = {
         'comp_row4_mace': '✅ Повністю авто',
         'comp_row4_oth': '⚠️ Частково / Вручную',
 
-        # Об'єднана секція
         'comb_title': 'Безпека, Системні вимоги та Часті запитання',
         'sec_title': '100% Безпека',
         'sec_1_title': 'Без вірусів',
@@ -384,7 +411,6 @@ TRANSLATIONS = {
         'faq_q3': 'Як виділити більше оперативної пам\'яті?',
         'faq_a3': 'Перейди в Налаштування лаунчера -> Виділення пам\'яті -> Посунь повзунок на потрібний обсяг ОЗП.',
 
-        # Інструкція оновлення
         'update_modal_title': 'Інструкція з оновлення',
         'update_step1': '1. Встановіть файл оновлень.',
         'update_step2': '2. Покладіть файл оновлення в папку updates в кореневу папку Mace Launcher ("Mace Launcher\\updates").',
@@ -392,14 +418,9 @@ TRANSLATIONS = {
         'update_step4': '4. Дотримуйтесь інструкцій у вікні, що відкрилося.',
         'update_btn_download': 'Завантажити файл оновлення',
 
-        # Patch Notes
         'patch_title': 'Історія оновлень',
-        'patch_v103_title': 'Версія 1.0.3 (Поточна)',
-        'patch_v103_desc': 'Додано зміну мови, розширено налаштування та підключено повноцінну роботу NeoForge.',
-        'patch_v102_title': 'Версія 1.0.2',
-        'patch_v102_desc': 'Додано пошук Modrinth API та моніторинг апаратних ресурсів.',
-        'patch_v101_title': 'Версія 1.0.1',
-        'patch_v101_desc': 'Оптимізовано кешування, прискорено завантаження файлів та покращено інтерфейс.',
+        'patch_title_prefix': 'Версія',
+        'patch_current': '(Поточна)',
 
         'how_title': 'Як почати грати за 3 кроки',
         'step_1_title': '1. Завантаж',
@@ -434,14 +455,18 @@ def index():
 
     css_file = 'stile-black-theme.css' if theme == 'black' else 'stile-light-theme.css'
     
-    # Отслеживаем куки пользователя
+    # Витягуємо всі оновлення з бази даних для відображення
+    db = get_db()
+    cur = db.execute('SELECT * FROM updates ORDER BY id DESC')
+    updates = cur.fetchall()
+    
+    current_version = get_latest_version()
+
     user_downloaded = request.cookies.get('user_downloaded') == 'true'
     user_version = request.cookies.get('user_version', '0.0.0')
     
-    # Нужно ли предлагать обновление? (Если юзер скачал лаунчер и его версия ниже актуальной, или актуальная)
-    show_updates_button = user_downloaded and user_version != CURRENT_VERSION
+    show_updates_button = user_downloaded and user_version != current_version
     show_download_installer = not user_downloaded
-
     downloads_count = get_download_count()
 
     return render_template(
@@ -454,7 +479,8 @@ def index():
         downloads_count=downloads_count,
         show_download_installer=show_download_installer,
         show_updates_button=show_updates_button,
-        current_version=CURRENT_VERSION
+        current_version=current_version,
+        updates=updates # Передаємо масив оновлень у шаблон
     )
 
 @app.route('/download/installer/<path:filename>')
@@ -465,11 +491,11 @@ def download_installer(filename):
         return f"File not found at: {file_path}", 404
 
     increment_download_count()
+    current_version = get_latest_version()
 
     response = make_response(send_from_directory(installer_dir, filename, as_attachment=True))
-    # Ставим куки юзеру
     response.set_cookie('user_downloaded', 'true', max_age=315360000)
-    response.set_cookie('user_version', CURRENT_VERSION, max_age=315360000)
+    response.set_cookie('user_version', current_version, max_age=315360000)
     return response
 
 @app.route('/download/update/<path:filename>')
@@ -479,13 +505,12 @@ def download_update(filename):
     if not os.path.exists(file_path):
         return f"File not found at: {file_path}", 404
 
+    current_version = get_latest_version()
     response = make_response(send_from_directory(update_dir, filename, as_attachment=True))
     response.set_cookie('user_downloaded', 'true', max_age=315360000)
-    response.set_cookie('user_version', CURRENT_VERSION, max_age=315360000)
+    response.set_cookie('user_version', current_version, max_age=315360000)
     return response
 
-# ================= АДМИН ПАНЕЛЬ =================
-# ================= АДМИН ПАНЕЛЬ =================
 @app.route('/admin', methods=['GET', 'POST'])
 def admin_panel():
     msg = ""
@@ -506,7 +531,7 @@ def admin_panel():
                 status_type = "error"
 
         elif action == 'upload' and session.get('admin_logged_in'):
-            upload_type = request.form.get('upload_type') # 'installer' or 'update'
+            upload_type = request.form.get('upload_type')
             file = request.files.get('file')
 
             if file and file.filename != '':
@@ -516,7 +541,6 @@ def admin_panel():
                 file_path = os.path.join(target_dir, file.filename)
                 file.save(file_path)
 
-                # Push to Git
                 success, git_msg = git_push_changes(f"Admin uploaded new {upload_type}: {file.filename}")
                 if success:
                     msg = f"File {file.filename} uploaded successfully and pushed to GitHub!"
@@ -528,7 +552,6 @@ def admin_panel():
                 msg = "No file selected!"
                 status_type = "error"
 
-        # === НОВИЙ ОБРОБНИК: Додавання оновлення в історію ===
         elif action == 'add_patch' and session.get('admin_logged_in'):
             version = request.form.get('version', '').strip()
             desc_en = request.form.get('desc_en', '').strip()
@@ -536,26 +559,12 @@ def admin_panel():
             desc_uk = request.form.get('desc_uk', '').strip()
 
             if version and desc_en and desc_ru and desc_uk:
-                # Генеруємо ключі для TRANSLATIONS
-                v_clean = version.replace('.', '')
-                title_key = f'patch_v{v_clean}_title'
-                desc_key = f'patch_v{v_clean}_desc'
+                # Зберігаємо оновлення прямо в базу даних!
+                db = get_db()
+                db.execute('INSERT INTO updates (version, desc_en, desc_ru, desc_uk) VALUES (?, ?, ?, ?)', 
+                           (version, desc_en, desc_ru, desc_uk))
+                db.commit()
 
-                # Записуємо в динамічний TRANSLATIONS
-                TRANSLATIONS['en'][title_key] = f'Version {version}'
-                TRANSLATIONS['en'][desc_key] = desc_en
-
-                TRANSLATIONS['ru'][title_key] = f'Версия {version}'
-                TRANSLATIONS['ru'][desc_key] = desc_ru
-
-                TRANSLATIONS['uk'][title_key] = f'Версія {version}'
-                TRANSLATIONS['uk'][desc_key] = desc_uk
-
-                # За бажанням оновлюємо поточну версію додатка
-                global CURRENT_VERSION
-                CURRENT_VERSION = version
-
-                # Автоматичний коміт та пуш змін на GitHub
                 success, git_msg = git_push_changes(f"Admin added update patch v{version} to history")
                 if success:
                     msg = f"Update v{version} added successfully to patch notes and pushed to GitHub!"
