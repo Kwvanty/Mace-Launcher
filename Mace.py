@@ -67,6 +67,10 @@ def init_db():
                  'Mace Launcher comes with Python already built in, so you do not need to install or configure it manually. Just install the launcher and start using it.',
                  'Mace Launcher уже содержит встроенный Python, поэтому вам не нужно устанавливать или настраивать его вручную. Просто установите лаунчер и начинайте пользоваться им.',
                  'Mace Launcher вже містить вбудований Python, тому вам не потрібно встановлювати або налаштовувати його вручну. Просто встановіть лаунчер і починайте користуватися ним.')
+                ('1.0.5',
+                 'Fixed reported bugs and added support for the Forge loader.',
+                 'Исправлены обнаруженные ошибки и добавлена поддержка загрузчика Forge.',
+                 'Виправлено виявлені помилки та додано підтримку завантажувача Forge.')
             ]
             cursor.executemany('INSERT INTO Mace (version, desc_en, desc_ru, desc_uk) VALUES (?, ?, ?, ?)', initial_updates)
         db.commit()
