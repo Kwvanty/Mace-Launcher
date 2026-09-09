@@ -71,6 +71,10 @@ def init_db():
                  'Fixed reported bugs and added support for the Forge loader.',
                  'Исправлены обнаруженные ошибки и добавлена поддержка загрузчика Forge.',
                  'Виправлено виявлені помилки та додано підтримку завантажувача Forge.')
+                ('1.0.6',
+                 'Bug fixed.',
+                 'Исправление багов',
+                 'Виправлення багів')
             ]
             cursor.executemany('INSERT INTO Mace (version, desc_en, desc_ru, desc_uk) VALUES (?, ?, ?, ?)', initial_updates)
         db.commit()
