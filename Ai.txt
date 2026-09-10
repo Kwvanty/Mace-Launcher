@@ -23,6 +23,9 @@ Current version:
 Developer:
 Kwvanty — 8th-grade developer and adventurer.
 
+It is safe:
+There is no point in hacking you or flooding your device with viruses.
+The team simply wants the user to enjoy a comfortable experience.
 Project status:
 Active development
 
