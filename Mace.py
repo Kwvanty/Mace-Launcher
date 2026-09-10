@@ -1,3 +1,4 @@
+```python
 import os
 import hashlib
 import subprocess
@@ -308,7 +309,7 @@ TRANSLATIONS = {
         'faq_q2': 'Поддерживает ли он моды и модлоадеры?',
         'faq_a2': 'Конечно! Встроена полная поддержка Fabric, Forge, NeoForge и кастомных сборок.',
         'faq_q3': 'Как выделить больше оперативной памяти игре?',
-        'faq_a3': 'Зайди в Настройки лаунчера -> Выделение памяти -> Передвинь ползунок на нужный объём ОЗУ.',
+        'faq_a3': 'Зайди в Настройки лаунчера -> Выделение памяти -> Передвинь слайдер на нужный объём ОЗУ.',
 
         'update_modal_title': 'Инструкция по обновлению',
         'update_step1': '1. Установите файл обновлений.',
@@ -424,7 +425,7 @@ TRANSLATIONS = {
         'update_step2': '2. Покладіть файл оновлення в папку updates в кореневу папку Mace Launcher ("Mace Launcher\\updates").',
         'update_step3': '3. Запустіть Mace Launcher.',
         'update_step4': '4. Дотримуйтесь інструкцій у вікні, що відкрилося.',
-        'update_btn_download': 'Завантажити файл оновлення',
+        'update_btn_download': 'Завантажити файл оновлень',
 
         'patch_title': 'Історія оновлень',
         'patch_title_prefix': 'Версия',
@@ -452,6 +453,14 @@ LANGUAGES = {
     'ru': {'name': 'Русский', 'flag': '🇷🇺'},
     'uk': {'name': 'Українська', 'flag': '🇺🇦'}
 }
+
+# ================= GOOGLE SEARCH CONSOLE =================
+@app.route('/google12eaad2a9b203569.html')
+def google_verification():
+    return send_from_directory(
+        app.root_path,
+        'google12eaad2a9b203569.html'
+    )
 
 @app.route('/')
 def index():
@@ -590,3 +599,4 @@ def admin_panel():
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
+```
