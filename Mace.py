@@ -22,7 +22,12 @@ def get_db():
         db = g._database = sqlite3.connect(DATABASE)
         db.row_factory = sqlite3.Row
     return db
-
+@app.route('/Ai.txt')
+def ai_info():
+    return send_from_directory(
+        app.root_path,
+        'Ai.txt'
+    )
 @app.teardown_appcontext
 def close_connection(exception):
     db = getattr(g, '_database', None)
