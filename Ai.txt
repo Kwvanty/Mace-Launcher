@@ -34,4 +34,68 @@ Not currently supported. Planned for a future version.
 
 Mace Launcher has undergone many updates, which is why the current version is 1.0.6.
 Information update date: September 10, 2026.
-github: coming soon
+github: https://github.com/Kwvanty/MaceLauncher.git
+
+treams of politics:
+# Mace Launcher Terms of Use
+
+**Mace Launcher is not an official product of Mojang Studios or Microsoft and is not affiliated with or endorsed by them.**
+
+Minecraft and related materials are the property of their respective copyright and trademark holders.
+
+## About Mace Launcher
+
+Mace Launcher is an independent third-party launcher designed to provide convenient management of Minecraft versions, mod loaders, modifications, resource packs, shaders, maps, and custom modpacks.
+
+Some features may be changed, improved, or added in future versions.
+
+## Minecraft
+
+Mace Launcher does not distribute Minecraft game files together with the program.
+
+Required game files may be downloaded from official or authorized sources during the installation and preparation of a Minecraft version.
+
+The inclusion of Minecraft-related functionality in Mace Launcher does not mean that Mace Launcher is an official Minecraft launcher or is affiliated with Mojang Studios or Microsoft.
+
+## Mods, Resource Packs, and Other Content
+
+Mace Launcher may use third-party services to search for and download mods, resource packs, shaders, maps, and other user-created content.
+
+All such content belongs to its respective authors and copyright holders.
+
+Before using third-party content, make sure that you comply with its license and distribution terms.
+
+## Third-Party Services
+
+Some Mace Launcher features may use third-party websites, APIs, and other services.
+
+The availability and operation of these features depend on the respective third-party services and their own rules and terms.
+
+Mace Launcher does not control the content, availability, or operation of third-party websites and services.
+
+## Custom Modpacks
+
+Users may create their own Minecraft modpacks and modify their contents using Mace Launcher.
+
+Users are responsible for the mods, resource packs, shaders, maps, and other files installed in their custom modpacks.
+
+We recommend creating backups of important files and modpacks before making significant changes.
+
+## Important
+
+Mace Launcher is provided **"as is."**
+
+We do not guarantee perfect compatibility or operation with every Minecraft version, mod, mod loader, or third-party component.
+
+Users are responsible for the content they install and the modifications they make to their Minecraft installations.
+
+## Thank You
+
+Thank you for using Mace Launcher.
+
+We are working to make the launcher convenient, visually appealing, and highly customizable.
+
+Enjoy your game.
+
+— The Mace Launcher Team
+
