@@ -460,7 +460,18 @@ def google_verification():
         app.root_path,
         'google12eaad2a9b203569.html'
     )
-
+@app.route('/sitemap.xml')
+def sitemap():
+    response = make_response(
+        """<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+    <url>
+        <loc>https://mace-launcher.onrender.com/</loc>
+    </url>
+</urlset>"""
+    )
+    response.headers['Content-Type'] = 'application/xml'
+    return response
 @app.route('/')
 def index():
     theme = request.args.get('theme', 'black')
