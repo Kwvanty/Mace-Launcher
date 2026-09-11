@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ t.title }}</title>
+    <!-- Иконка сайта (фавиконка) -->
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='icon.png') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename=css_file) }}">
 </head>
 <body>
@@ -365,3 +367,4 @@
     </script>
 </body>
 </html>
+
