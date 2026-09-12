@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+
+<html lang="ru">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>Вход — Mace Launcher</title>
+
+    <link
+        rel="icon"
+        type="image/png"
+        href="{{ url_for('static', filename='icon.png') }}"
+    >
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', filename=css_file) }}"
+    >
+
+</head>
+
+
+<body>
+
+    <div class="account-page">
+
+
+        <div class="account-card">
+
+
+            <div class="account-logo">
+
+                Ⓜ️ Mace Launcher
+
+            </div>
+
+
+            <h1>
+
+                Вход
+
+            </h1>
+
+
+            <p class="account-description">
+
+                Войдите в аккаунт Mace Launcher
+
+            </p>
+
+
+            <form id="loginForm">
+
+
+                <label>
+
+                    Имя
+
+                </label>
+
+
+                <input
+
+                    type="text"
+
+                    id="username"
+
+                    placeholder="Введите имя"
+
+                    required
+
+                >
+
+
+                <label>
+
+                    Пароль
+
+                </label>
+
+
+                <input
+
+                    type="password"
+
+                    id="password"
+
+                    placeholder="Введите пароль"
+
+                    required
+
+                >
+
+
+                <button
+                    type="submit"
+                    class="account-submit login-submit"
+                >
+
+                    Войти
+
+                </button>
+
+
+            </form>
+
+
+            <div
+                id="message"
+                class="account-message"
+            ></div>
+
+
+            <p class="account-switch">
+
+                Нет аккаунта?
+
+                <a href="/register">
+
+                    Зарегистрироваться
+
+                </a>
+
+            </p>
+
+
+            <a
+                href="/"
+                class="back-home"
+            >
+
+                ← Вернуться на главную
+
+            </a>
+
+
+        </div>
+
+    </div>
+
+
+    <script>
+
+
+        // ======================================
+        // Адрес MaceHost
+        // ======================================
+
+        const MACE_HOST =
+            "http://127.0.0.1:8000";
+
+
+        // ======================================
+        // Вход
+        // ======================================
+
+        document
+
+            .getElementById("loginForm")
+
+            .addEventListener(
+
+                "submit",
+
+                async function(event) {
+
+
+                    event.preventDefault();
+
+
+                    const username =
+
+                        document
+
+                            .getElementById(
+                                "username"
+                            )
+
+                            .value
+
+                            .trim();
+
+
+                    const password =
+
+                        document
+
+                            .getElementById(
+                                "password"
+                            )
+
+                            .value;
+
+
+                    const messageElement =
+
+                        document
+
+                            .getElementById(
+                                "message"
+                            );
+
+
+                    messageElement.textContent =
+
+                        "Вход...";
+
+
+                    try {
+
+
+                        const response =
+
+                            await fetch(
+
+                                `${MACE_HOST}/login`,
+
+                                {
+
+                                    method:
+
+                                        "POST",
+
+
+                                    headers: {
+
+                                        "Content-Type":
+
+                                            "application/json"
+
+                                    },
+
+
+                                    body:
+
+                                        JSON.stringify({
+
+                                            username:
+
+                                                username,
+
+                                            password:
+
+                                                password
+
+                                        })
+
+                                }
+
+                            );
+
+
+                        const data =
+
+                            await response.json();
+
+
+                        // =========================
+                        // Ошибка
+                        // =========================
+
+                        if (!response.ok) {
+
+
+                            messageElement.textContent =
+
+                                data.detail
+                                ||
+                                "Ошибка входа";
+
+
+                            messageElement.className =
+
+                                "account-message error";
+
+
+                            return;
+
+                        }
+
+
+                        // =========================
+                        // Успешный вход
+                        // =========================
+
+                        messageElement.innerHTML =
+
+                            `
+                            <strong>
+                                Вход выполнен!
+                            </strong>
+
+                            <br><br>
+
+                            Добро пожаловать,
+                            ${data.username}!
+
+                            <br>
+
+                            Ваш MaceId:
+
+                            ${data.mace_id}
+                            `;
+
+
+                        messageElement.className =
+
+                            "account-message success";
+
+
+                        // Позже здесь будет:
+                        //
+                        // window.location.href =
+                        //     "/profile";
+
+
+                    }
+
+
+                    catch (error) {
+
+
+                        console.error(error);
+
+
+                        messageElement.textContent =
+
+                            "Не удалось подключиться "
+                            +
+                            "к MaceHost";
+
+
+                        messageElement.className =
+
+                            "account-message error";
+
+                    }
+
+
+                }
+
+            );
+
+
+    </script>
+
+
+</body>
+
+</html>
