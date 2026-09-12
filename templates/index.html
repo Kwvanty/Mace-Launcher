@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ t.title }}</title>
-    <!-- Иконка сайта (фавиконка) -->
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='icon.png') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename=css_file) }}">
 </head>
@@ -21,8 +20,9 @@
             <a href="#updates">{{ t.nav_updates }}</a>
             <a href="#combined-info">{{ t.nav_faq }}</a>
         </nav>
-        
         <div class="header-controls">
+            <a href="/login?lang={{ current_lang }}&theme={{ current_theme }}" class="btn-login">Войти</a>
+            <a href="/register?lang={{ current_lang }}&theme={{ current_theme }}" class="btn-register">Зарегистрироваться</a>
             <div class="lang-dropdown">
                 <button class="lang-btn">
                     <span>{{ languages[current_lang].flag }}</span>
@@ -31,15 +31,13 @@
                 </button>
                 <div class="lang-menu">
                     {% for code, lang_info in languages.items() %}
-                        <a href="/?lang={{ code }}&theme={{ current_theme }}" 
-                           class="lang-item {% if code == current_lang %}active{% endif %}">
+                        <a href="/?lang={{ code }}&theme={{ current_theme }}" class="lang-item {% if code == current_lang %}active{% endif %}">
                             <span class="flag">{{ lang_info.flag }}</span>
                             <span class="lang-name">{{ lang_info.name }}</span>
                         </a>
                     {% endfor %}
                 </div>
             </div>
-
             <div class="theme-toggle">
                 {% if current_theme == 'black' %}
                     <a href="/?theme=light&lang={{ current_lang }}" class="btn-theme">{{ t.theme_light }}</a>
@@ -49,7 +47,6 @@
             </div>
         </div>
     </header>
-
     <main class="hero">
         <div class="hero-content animate-fade-up">
             <h1>{{ t.hero_title }}</h1>
@@ -57,23 +54,18 @@
             <div class="download-counter-badge">
                 📥 {{ t.downloads_count }}: <strong>{{ downloads_count }}</strong>
             </div>
-            
             <div class="cta-buttons">
                 <a href="/download/installer/MaceInstaller.exe" onclick="showDownloadModal(event)" class="btn btn-primary pulse-hover">{{ t.btn_download }}</a>
-                
                 {% if show_updates_button %}
                     <button onclick="openUpdateModal()" class="btn btn-update pulse-hover">🔄 {{ t.btn_updates }}</button>
                 {% endif %}
-                
                 <a href="#features" class="btn btn-secondary">{{ t.btn_learn_more }}</a>
             </div>
-
             <div class="hero-image-container animate-fade-up">
                 <img src="{{ url_for('static', filename='images/imglauncher.png') }}" alt="Mace Launcher Preview" class="launcher-preview">
             </div>
         </div>
     </main>
-
     <section id="features" class="features-section">
         <h2 class="animate-fade-up">{{ t.features_title }}</h2>
         <div class="cards-grid">
@@ -91,11 +83,9 @@
             </div>
         </div>
     </section>
-
     <section id="customization" class="section-container alt-bg">
         <h2 class="text-center">{{ t.custom_title }}</h2>
         <p class="section-desc text-center">{{ t.custom_desc }}</p>
-
         <div class="customization-split">
             <div class="custom-table-col">
                 <div class="table-wrapper">
@@ -123,13 +113,11 @@
                     </table>
                 </div>
             </div>
-
             <div class="custom-showcase-container">
                 <img id="imgCustom2" src="{{ url_for('static', filename='images/imglauncher2.png') }}" alt="Customization Preview 2" class="custom-card front">
                 <img id="imgCustom3" src="{{ url_for('static', filename='images/imglauncher3.png') }}" alt="Customization Preview 3" class="custom-card back">
             </div>
         </div>
-
         <div class="modules-showcase-container">
             <div class="modules-info">
                 <h3>{{ t.modules_title }}</h3>
@@ -145,7 +133,6 @@
             </div>
         </div>
     </section>
-
     <section id="compare" class="section-container alt-bg">
         <h2>{{ t.comp_title }}</h2>
         <div class="table-wrapper">
@@ -182,7 +169,6 @@
             </table>
         </div>
     </section>
-
     <section id="updates" class="section-container">
         <h2>{{ t.patch_title }}</h2>
         <div class="timeline">
@@ -202,7 +188,6 @@
             {% endfor %}
         </div>
     </section>
-
     <section id="how-to-start" class="section-container alt-bg">
         <h2>{{ t.how_title }}</h2>
         <div class="steps-grid">
@@ -223,7 +208,6 @@
             </div>
         </div>
     </section>
-
     <section id="combined-info" class="section-container">
         <h2 class="text-center">{{ t.comb_title }}</h2>
         <div class="single-column-wrapper">
@@ -280,7 +264,6 @@
             </div>
         </div>
     </section>
-
     <footer id="download" class="footer">
         <div class="footer-content">
             <span class="footer-rights">{{ t.footer_rights }}</span>
@@ -290,7 +273,6 @@
             <a href="https://discord.gg" target="_blank" class="footer-link">💬 {{ t.footer_discord }}</a>
         </div>
     </footer>
-
     <div id="downloadModal" class="modal-backdrop">
         <div class="modal-box">
             <h3>🎉 {{ t.modal_title }}</h3>
@@ -298,7 +280,6 @@
             <button class="btn btn-primary" onclick="closeDownloadModal()">{{ t.modal_close }}</button>
         </div>
     </div>
-
     <div id="updateModal" class="modal-backdrop">
         <div class="modal-box update-modal-box">
             <h3>🚀 {{ t.update_modal_title }} (v{{ current_version }})</h3>
@@ -325,7 +306,6 @@
             </div>
         </div>
     </div>
-
     <script>
         function showDownloadModal(event) {
             event.preventDefault();
@@ -345,7 +325,6 @@
         function closeUpdateModal() {
             document.getElementById('updateModal').classList.remove('active');
         }
-
         const img2 = document.getElementById('imgCustom2');
         const img3 = document.getElementById('imgCustom3');
         function swapCustomCards() {
@@ -367,4 +346,3 @@
     </script>
 </body>
 </html>
-
