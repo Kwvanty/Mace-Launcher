@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="mace-api-base" content="{{ mace_host_url }}">
     <title>{{ t.title }}</title>
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='icon.png') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename=css_file) }}">
@@ -21,8 +22,8 @@
             <a href="#combined-info">{{ t.nav_faq }}</a>
         </nav>
         <div class="header-controls">
-            <a href="/login?lang={{ current_lang }}&theme={{ current_theme }}" class="btn-login">Войти</a>
-            <a href="/register?lang={{ current_lang }}&theme={{ current_theme }}" class="btn-register">Зарегистрироваться</a>
+            <a id="site-login-link" href="/login?lang={{ current_lang }}&theme={{ current_theme }}" class="btn-login">Войти</a>
+            <a id="site-register-link" href="/register?lang={{ current_lang }}&theme={{ current_theme }}" class="btn-register">Зарегистрироваться</a>
             <div class="lang-dropdown">
                 <button class="lang-btn">
                     <span>{{ languages[current_lang].flag }}</span>
@@ -53,6 +54,10 @@
             <p>{{ t.hero_desc }}</p>
             <div class="download-counter-badge">
                 📥 {{ t.downloads_count }}: <strong>{{ downloads_count }}</strong>
+            </div>
+            <div id="mace-server-status" role="status" style="display:inline-flex;align-items:center;gap:8px;margin-top:12px;padding:8px 12px;border:1px solid rgba(0,217,255,.2);border-radius:999px;background:rgba(0,217,255,.06);color:#aebfd0;font-size:12px;">
+                <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#91a2b5;"></span>
+                <span id="mace-server-status-text">Проверяем подключение к Mace Accounts…</span>
             </div>
             <div class="cta-buttons">
                 <a href="/download/installer/MaceInstaller.exe" onclick="showDownloadModal(event)" class="btn btn-primary pulse-hover">{{ t.btn_download }}</a>
@@ -343,6 +348,51 @@
             }
         }
         setInterval(swapCustomCards, 7000);
+        // Keep the header in sync with the API session stored by the account pages.
+        (function updateAccountLinks() {
+            const loginLink = document.getElementById('site-login-link');
+            const registerLink = document.getElementById('site-register-link');
+            const token = localStorage.getItem('mace_access_token');
+            if (!loginLink || !registerLink || !token) return;
+            loginLink.textContent = 'Профиль';
+            loginLink.href = '/profile';
+            registerLink.textContent = 'Выйти';
+            registerLink.href = '#';
+            registerLink.addEventListener('click', async event => {
+                event.preventDefault();
+                try {
+                    const apiBase = document.querySelector('meta[name="mace-api-base"]')?.content?.replace(/\/+$/, '');
+                    if (apiBase) await fetch(`${apiBase}/logout`, {method:'POST',headers:{'Authorization':'Bearer '+token,'Accept':'application/json'}});
+                } catch (_) { /* Clear the local session even if the server is offline. */ }
+                localStorage.removeItem('mace_access_token');
+                window.location.reload();
+            });
+        })();
+        // The API address is injected by Flask from mace_server.txt.
+        (async function checkMaceAccounts() {
+            const status = document.getElementById('mace-server-status');
+            if (!status) return;
+            const dot = status.querySelector('span');
+            const apiBase = document.querySelector('meta[name="mace-api-base"]')?.content?.replace(/\/+$/, '');
+            try {
+                if (!apiBase) throw new Error('API URL is not configured');
+                const controller = new AbortController();
+                const timer = setTimeout(() => controller.abort(), 3500);
+                const response = await fetch(`${apiBase}/health`, { headers: { 'Accept': 'application/json' }, signal: controller.signal });
+                clearTimeout(timer);
+                if (!response.ok) throw new Error('API is offline');
+                const data = await response.json();
+                if (!data.ok) throw new Error('API is offline');
+                document.getElementById('mace-server-status-text').textContent = 'Mace Accounts: сервер онлайн';
+                if (dot) dot.style.background = '#65e0ad';
+                status.style.borderColor = 'rgba(101,224,173,.3)';
+            } catch (_) {
+                document.getElementById('mace-server-status-text').textContent = 'Mace Accounts: сервер недоступен';
+                if (dot) dot.style.background = '#ff7f91';
+                status.style.borderColor = 'rgba(255,127,145,.3)';
+                status.title = 'Проверьте адрес в mace_server.txt и доступность сервера.';
+            }
+        })();
     </script>
 </body>
 </html>
