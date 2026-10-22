@@ -1,677 +1,398 @@
-import os
-import hashlib
-import subprocess
-import sqlite3
-from flask import Flask, render_template, send_from_directory, request, redirect, url_for, session, make_response, g, jsonify
-from mace_api_client import read_server_url
-
-app = Flask(
-    __name__,
-    template_folder='templates',
-    static_folder='static'
-)
-app.secret_key = os.environ.get('MACE_FLASK_SECRET_KEY') or hashlib.sha256(os.urandom(32)).hexdigest()
-
-ADMIN_PASSWORD_HASH = "1b24fbfacd5b57d04c0b955d4440299abca943cc36aed243bb0523571e2c8cd6"
-GIT_REPO_URL = "https://github.com/Kwvanty/Mace-Launcher.git"
-DATABASE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'mace.db')
-
-# ================= РОБОТА З БАЗОЮ ДАНИХ =================
-def get_db():
-    db = getattr(g, '_database', None)
-    if db is None:
-        db = g._database = sqlite3.connect(DATABASE)
-        db.row_factory = sqlite3.Row
-    return db
-@app.route('/Ai.txt')
-def ai_info():
-    return send_from_directory(
-        app.root_path,
-        'Ai.txt'
-    )
-@app.teardown_appcontext
-def close_connection(exception):
-    db = getattr(g, '_database', None)
-    if db is not None:
-        db.close()
-
-def init_db():
-    with app.app_context():
-        db = get_db()
-        cursor = db.cursor()
-        
-        # Таблиця для скачувань
-        cursor.execute('CREATE TABLE IF NOT EXISTS downloads (id INTEGER PRIMARY KEY, count INTEGER)')
-        cursor.execute('SELECT count FROM downloads WHERE id = 1')
-        if not cursor.fetchone():
-            count = 0
-            if os.path.exists("downloads.txt"):
-                try:
-                    with open("downloads.txt", 'r', encoding='utf-8') as f:
-                        count = int(f.read().strip())
-                except Exception:
-                    pass
-            cursor.execute('INSERT INTO downloads (id, count) VALUES (1, ?)', (count,))
-        
-        # Створюємо таблицю Mace для оновлень
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS Mace (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                version TEXT,
-                desc_en TEXT,
-                desc_ru TEXT,
-                desc_uk TEXT
-            )
-        ''')
-        cursor.execute('SELECT COUNT(*) FROM Mace')
-        if cursor.fetchone()[0] == 0:
-            initial_updates = [
-                ('1.0.1', 'Optimized resource caching, accelerated asset downloading, and fixed UI elements.', 'Оптимизировано кэширование, ускорена загрузка файлов и улучшен интерфейс.', 'Оптимізовано кешування, прискорено завантаження файлів та покращено інтерфейс.'),
-                ('1.0.2', 'Added Modrinth API search and hardware telemetry monitor.', 'Добавлен поиск Modrinth API и мониторинг железных ресурсов.', 'Додано пошук Modrinth API та моніторинг апаратних ресурсів.'),
-                ('1.0.3', 'Added language switching, expanded settings options, and fully integrated NeoForge modloader support.', 'Добавлена смена языка, расширенные настройки и полноценная работа модлоадера NeoForge.', 'Додано зміну мови, розширено налаштування та підключено повноцінну роботу NeoForge.'),
-                ('1.0.4',
-                 'Mace Launcher comes with Python already built in, so you do not need to install or configure it manually. Just install the launcher and start using it.',
-                 'Mace Launcher уже содержит встроенный Python, поэтому вам не нужно устанавливать или настраивать его вручную. Просто установите лаунчер и начинайте пользоваться им.',
-                 'Mace Launcher вже містить вбудований Python, тому вам не потрібно встановлювати або налаштовувати його вручну. Просто встановіть лаунчер і починайте користуватися ним.'),
-                ('1.0.5',
-                 'Fixed reported bugs and added support for the Forge loader.',
-                 'Исправлены обнаруженные ошибки и добавлена поддержка загрузчика Forge.',
-                 'Виправлено виявлені помилки та додано підтримку завантажувача Forge.'),
-                ('1.0.6',
-                 'Bug fixed.',
-                 'Исправление багов',
-                 'Виправлення багів')
-            ]
-            cursor.executemany('INSERT INTO Mace (version, desc_en, desc_ru, desc_uk) VALUES (?, ?, ?, ?)', initial_updates)
-        db.commit()
-
-init_db()
-
-# Account API URL is configured in one plain-text file shared by the website
-# and the desktop launcher. Read it per request so edits take effect immediately.
-@app.context_processor
-def inject_mace_account_settings():
-    # Render/public hosting can set MACE_API_BASE; if absent, use the text file.
-    # The TXT remains the normal source of truth for local/self-hosted installs.
-    configured_api = (os.environ.get("MACE_API_BASE") or "").strip()
-    api_url = read_server_url(os.path.join(app.root_path, "mace_server.txt"))
-    if configured_api:
-        from mace_api_client import normalize_server_address
-        api_url = normalize_server_address(configured_api)
-    return {"mace_host_url": api_url}
-
-
-def _account_template_context():
-    theme = request.args.get("theme", "black")
-    if theme not in ("black", "light"):
-        theme = "black"
-    lang = request.args.get("lang", "en")
-    if lang not in TRANSLATIONS:
-        lang = "en"
-    return {
-        "css_file": "stile-black-theme.css" if theme == "black" else "stile-light-theme.css",
-        "current_theme": theme,
-        "current_lang": lang,
-    }
-
-
-@app.route("/login", methods=["GET"], strict_slashes=False)
-def login_page():
-    """Serve the website login form (the API POST lives on MaceHost)."""
-    return render_template("login.html", **_account_template_context())
-
-
-@app.route("/register", methods=["GET"], strict_slashes=False)
-def register_page():
-    """Serve the website registration form."""
-    return render_template("register.html", **_account_template_context())
-
-
-@app.route("/profile", methods=["GET"], strict_slashes=False)
-def account_profile_page():
-    """Serve the authenticated account/social page; auth is checked by the API."""
-    return render_template("profile.html", **_account_template_context())
-
-
-@app.route("/site-health", methods=["GET"])
-def site_health():
-    """Small deployment probe to confirm that Render is running the updated app."""
-    return jsonify({
-        "ok": True,
-        "service": "Mace Launcher Website",
-        "version": "accounts-routes-2026-10-22",
-        "routes": {"login": url_for("login_page"), "register": url_for("register_page"), "profile": url_for("account_profile_page")},
-    })
-
-
-def get_download_count():
-    db = get_db()
-    cur = db.execute('SELECT count FROM downloads WHERE id = 1')
-    row = cur.fetchone()
-    return row['count'] if row else 0
-
-def increment_download_count():
-    db = get_db()
-    db.execute('UPDATE downloads SET count = count + 1 WHERE id = 1')
-    db.commit()
-    return get_download_count()
-
-def get_latest_version():
-    db = get_db()
-    cur = db.execute('SELECT version FROM Mace ORDER BY id DESC LIMIT 1')
-    row = cur.fetchone()
-    return row['version'] if row else "0.0.0"
-
-def git_push_changes(commit_message):
-    try:
-        subprocess.run(["git", "add", "-A"], check=True)
-        status = subprocess.run(["git", "status", "--porcelain"], capture_output=True, text=True)
-        if not status.stdout.strip():
-            return True, "No changes detected to commit."
-
-        subprocess.run([
-            "git", "-c", "user.name=Kwvanty", "-c", "user.email=kwvanty7@example.com", 
-            "commit", "-m", commit_message
-        ], check=True)
-
-        subprocess.run(["git", "push", "origin", "HEAD:main"], check=True)
-        return True, "Successfully pushed to GitHub!"
-    except Exception as e:
-        return False, f"Git push error (Code 128 - check SSH/Token auth): {str(e)}"
-
-# ================= ПЕРЕКЛАДИ =================
-TRANSLATIONS = {
-    'en': {
-        'title': 'Mace Launcher',
-        'nav_features': 'Features',
-        'nav_customization': 'FULL CUSTOMIZATION',
-        'nav_modloaders': 'Modloaders',
-        'nav_compare': 'Compare',
-        'nav_updates': 'Updates',
-        'nav_faq': 'FAQ',
-        'theme_light': '☀️ Light Theme',
-        'theme_dark': '🌙 Dark Theme',
-        'hero_title': 'Mace Launcher',
-        'hero_desc': 'Next-generation fast, convenient, and powerful Minecraft launcher by Kwvanty.',
-        'downloads_count': 'Downloads',
-        'btn_download': 'Download Installer',
-        'btn_updates': 'Updates Available',
-        'btn_learn_more': 'Learn More',
-        'features_title': 'Launcher Features',
-        'feat_1_title': '⚡ High Performance',
-        'feat_1_desc': 'Optimized launch speed and minimal system resource consumption.',
-        'feat_2_title': '🧩 Mod Support',
-        'feat_2_desc': 'Convenient management of modpacks, mods, and tweaks in one click.',
-        'feat_3_title': '🛡️ Reliability',
-        'feat_3_desc': 'Stable updates and total security for your data.',
-        
-        'custom_title': 'FULL CUSTOMIZATION',
-        'custom_desc': 'Customize every pixel of your launcher for maximum comfort and style.',
-        'custom_th_param': 'Option',
-        'custom_th_desc': 'Feature Description',
-        'custom_row1_title': 'Visual Themes',
-        'custom_row1_desc': 'Full accent color control, custom dark/light modes, and background customization.',
-        'custom_row2_title': 'Layout & Elements',
-        'custom_row2_desc': 'Flexible interface scaling, hiding sidebars, and custom widgets.',
-        'custom_row3_title': 'Personalization',
-        'custom_row3_desc': 'Custom avatar frames, animated profile cards, and unique launch sounds.',
-
-        'modules_title': 'Flexible Modular Interface',
-        'modules_desc': 'Rearrange modules, change panel forms, and set up your perfect layout drag-and-drop style.',
-        'mod_feat_1': '✨ Drag & Drop placement',
-        'mod_feat_2': '📐 Resizable panel shapes',
-        'mod_feat_3': '🎨 Module background opacity',
-
-        'comp_title': 'Why Choose Mace Launcher?',
-        'comp_feature': 'Feature',
-        'comp_mace': 'Mace Launcher',
-        'comp_others': 'Other Launchers',
-        'comp_row1': 'Launch Speed',
-        'comp_row1_mace': '⚡ 1.5 seconds',
-        'comp_row1_oth': '🐢 Slow / Medium',
-        'comp_row2': 'System Telemetry (CPU/RAM)',
-        'comp_row2_mace': '✅ Built-in',
-        'comp_row2_oth': '❌ Missing',
-        'comp_row3': 'Modrinth & Modpacks API',
-        'comp_row3_mace': '✅ Direct Search & Install',
-        'comp_row3_oth': '⚠️ Partial / Manual',
-        'comp_row4': 'Automatic Java Setup',
-        'comp_row4_mace': '✅ Full Auto',
-        'comp_row4_oth': '⚠️ Partial / Manual',
-
-        'comb_title': 'Security, System Requirements & FAQ',
-        'sec_title': '100% Safe & Secure',
-        'sec_1_title': 'No Malware',
-        'sec_1_desc': 'Clean installer without third-party adware or bloatware.',
-        'sec_2_title': 'Encrypted Sessions',
-        'sec_2_desc': 'Your authorization tokens and account data stay locally encrypted.',
-
-        'sys_title': 'System Requirements',
-        'sys_os_title': 'Operating System',
-        'sys_os_desc': 'Windows 10 / 11 (64-bit)',
-        'sys_cpu_title': 'Processor',
-        'sys_cpu_desc': 'Intel Core i3 / AMD Ryzen 3 or higher',
-        'sys_ram_title': 'RAM Memory',
-        'sys_ram_desc': '4 GB (8 GB recommended)',
-        'sys_java_title': 'Java Environment',
-        'sys_java_desc': 'Pre-built (Automatic setup)',
-
-        'faq_title': 'Frequently Asked Questions',
-        'faq_q1': 'Is Mace Launcher completely free?',
-        'faq_a1': 'Yes, Mace Launcher is 100% free to use for all Minecraft players.',
-        'faq_q2': 'Does it support popular mods and modloaders?',
-        'faq_a2': 'Absolutely! Full support for Fabric, Forge, NeoForge, and custom modpacks is built right in.',
-        'faq_q3': 'How do I allocate more RAM to the game?',
-        'faq_a3': 'Open Launcher Settings -> Memory allocation -> Drag the slider to your desired RAM amount.',
-
-        'update_modal_title': 'Update Instructions',
-        'update_step1': '1. Download the update file below.',
-        'update_step2': '2. Place the downloaded file into the "updates" folder inside your Mace Launcher directory ("Mace Launcher\\updates").',
-        'update_step3': '3. Launch Mace Launcher.',
-        'update_step4': '4. Follow the instructions in the opened launcher window.',
-        'update_btn_download': 'Download Update File',
-
-        'patch_title': 'Recent Updates & Timeline',
-        'patch_title_prefix': 'Version',
-        'patch_current': '(Current)',
-
-        'how_title': 'How to Start Playing in 3 Steps',
-        'step_1_title': '1. Download',
-        'step_1_desc': 'Get the official MaceInstaller.exe by clicking the button above.',
-        'step_2_title': '2. Install',
-        'step_2_desc': 'Run the installer and follow the simple setup wizard instructions.',
-        'step_3_title': '3. Play',
-        'step_3_desc': 'Choose your favorite version or modpack and jump right into the game!',
-        
-        'modal_title': 'Thank you for downloading!',
-        'modal_desc': 'Your download should start automatically. Open MaceInstaller.exe once complete.',
-        'modal_close': 'Got it',
-        'footer_rights': '© 2026 Mace Launcher. All rights reserved.',
-        'footer_disclaimer': 'Mace Launcher is not an official Mojang product.',
-        'footer_discord': 'Join our Discord'
-    },
-    'ru': {
-        'title': 'Mace Launcher',
-        'nav_features': 'Возможности',
-        'nav_customization': 'ПОЛНАЯ КАСТОМИЗАЦИЯ',
-        'nav_modloaders': 'Модлоадери',
-        'nav_compare': 'Сравнение',
-        'nav_updates': 'Обновления',
-        'nav_faq': 'FAQ',
-        'theme_light': '☀️ Светлая тема',
-        'theme_dark': '🌙 Тёмная тема',
-        'hero_title': 'Mace Launcher',
-        'hero_desc': 'Быстрый, удобный и мощный лаунчер Minecraft нового поколения от Kwvanty.',
-        'downloads_count': 'Скачиваний',
-        'btn_download': 'Скачать Инсталлятор',
-        'btn_updates': 'Доступно обновление',
-        'btn_learn_more': 'Узнать больше',
-        'features_title': 'Преимущества лаунчера',
-        'feat_1_title': '⚡ Высокая скорость',
-        'feat_1_desc': 'Оптимизированный запуск и минимальное потребление ресурсов системы.',
-        'feat_2_title': '🧩 Поддержка модов',
-        'feat_2_desc': 'Удобное управление сборками, модами и модификаторами в один клик.',
-        'feat_3_title': '🛡️ Надёжность',
-        'feat_3_desc': 'Стабильные обновления и полная безопасность ваших данных.',
-
-        'custom_title': 'ПОЛНАЯ КАСТОМИЗАЦИЯ',
-        'custom_desc': 'Настраивайте каждый пиксель лаунчера под свой стиль и удобство.',
-        'custom_th_param': 'Параметр',
-        'custom_th_desc': 'Описание возможности',
-        'custom_row1_title': 'Темы оформления',
-        'custom_row1_desc': 'Полная смена цветовой палитры, поддержка темной и светлой темы, пользовательские акценты.',
-        'custom_row2_title': 'Виджеты и панель',
-        'custom_row2_desc': 'Свободная настройка расположения элементов, скрытие лишних блоков и гибкий интерфейс.',
-        'custom_row3_title': 'Персонализация',
-        'custom_row3_desc': 'Загрузка собственных фонов, кастомные иконки профиля и уникальные эффекты переходов.',
-
-        'modules_title': 'Гибкая модульная сетка',
-        'modules_desc': 'Перетаскивайте блоки, изменяйте форму модулей и адаптируйте рабочий экран под свои задачи.',
-        'mod_feat_1': '✨ Перенос блоков Drag & Drop',
-        'mod_feat_2': '📐 Изменение формы и размера',
-        'mod_feat_3': '🎨 Настройка прозрачности панелей',
-
-        'comp_title': 'Почему именно Mace Launcher?',
-        'comp_feature': 'Возможность',
-        'comp_mace': 'Mace Launcher',
-        'comp_others': 'Другие лаунчеры',
-        'comp_row1': 'Скорость запуска',
-        'comp_row1_mace': '⚡ 1.5 секунды',
-        'comp_row1_oth': '🐢 Медленно',
-        'comp_row2': 'Телеметрия ПК (CPU/RAM)',
-        'comp_row2_mace': '✅ Встроена',
-        'comp_row2_oth': '❌ Отсутствует',
-        'comp_row3': 'Поиск по Modrinth API',
-        'comp_row3_mace': '✅ Прямо в лаунчере',
-        'comp_row3_oth': '⚠️ Частично / Вручную',
-        'comp_row4': 'Автонастройка Java',
-        'comp_row4_mace': '✅ Полностью авто',
-        'comp_row4_oth': '⚠️ Частично / Вручную',
-
-        'comb_title': 'Безопасность, Требования и Вопросы',
-        'sec_title': '100% Безопасность',
-        'sec_1_title': 'Без вирусов',
-        'sec_1_desc': 'Чистый инсталлятор без стороннего софта и рекламы.',
-        'sec_2_title': 'Шифрование данных',
-        'sec_2_desc': 'Токены авторизации и профили хранятся в зашифрованном виде.',
-
-        'sys_title': 'Системные требования',
-        'sys_os_title': 'Операционная система',
-        'sys_os_desc': 'Windows 10 / 11 (64-bit)',
-        'sys_cpu_title': 'Процессор',
-        'sys_cpu_desc': 'Intel Core i3 / AMD Ryzen 3 или лучше',
-        'sys_ram_title': 'Оперативная память',
-        'sys_ram_desc': '4 ГБ (рекомендуется 8 ГБ)',
-        'sys_java_title': 'Среда Java',
-        'sys_java_desc': 'Встроенная (Автоматическая настройка)',
-
-        'faq_title': 'Часто задаваемые вопросы',
-        'faq_q1': 'Является ли Mace Launcher бесплатным?',
-        'faq_a1': 'Да, Mace Launcher абсолютно бесплатен для всех игроков.',
-        'faq_q2': 'Поддерживает ли он моды и модлоадеры?',
-        'faq_a2': 'Конечно! Встроена полная поддержка Fabric, Forge, NeoForge и кастомных сборок.',
-        'faq_q3': 'Как выделить больше оперативной памяти игре?',
-        'faq_a3': 'Зайди в Настройки лаунчера -> Выделение памяти -> Передвинь слайдер на нужный объём ОЗУ.',
-
-        'update_modal_title': 'Инструкция по обновлению',
-        'update_step1': '1. Установите файл обновлений.',
-        'update_step2': '2. Положите файл обновления в папку updates в корневую папку Mace Launcher ("Mace Launcher\\updates").',
-        'update_step3': '3. Запустите Mace Launcher.',
-        'update_step4': '4. Следуйте инструкциям в открывшемся окне.',
-        'update_btn_download': 'Скачать файл обновления',
-
-        'patch_title': 'История обновлений',
-        'patch_title_prefix': 'Версия',
-        'patch_current': '(Текущая)',
-
-        'how_title': 'Как начать играть за 3 шага',
-        'step_1_title': '1. Скачай',
-        'step_1_desc': 'Загрузи официальный MaceInstaller.exe, нажав кнопку выше.',
-        'step_2_title': '2. Установи',
-        'step_2_desc': 'Запусти инсталлятор и следуй простым инструкциям установки.',
-        'step_3_title': '3. Играй',
-        'step_3_desc': 'Выбери любимую версию или сборку модов и погружайся в игру!',
-
-        'modal_title': 'Спасибо за скачивание!',
-        'modal_desc': 'Загрузка запустится автоматически. После окончания откройте MaceInstaller.exe.',
-        'modal_close': 'Понятно',
-        'footer_rights': '© 2026 Mace Launcher. Все права защищены.',
-        'footer_disclaimer': 'Mace Launcher не является официальным продуктом Mojang.',
-        'footer_discord': 'Наш Discord'
-    },
-    'uk': {
-        'title': 'Mace Launcher',
-        'nav_features': 'Особливості',
-        'nav_customization': 'ПОВНА КАСТОМІЗАЦІЯ',
-        'nav_modloaders': 'Модлоадери',
-        'nav_compare': 'Порівняння',
-        'nav_updates': 'Оновлення',
-        'nav_faq': 'FAQ',
-        'theme_light': '☀️ Світла тема',
-        'theme_dark': '🌙 Темна тема',
-        'hero_title': 'Mace Launcher',
-        'hero_desc': 'Швидкий, зручний та потужний лаунчер Minecraft нового покоління від Kwvanty.',
-        'downloads_count': 'Завантажень',
-        'btn_download': 'Завантажити Інсталятор',
-        'btn_updates': 'Доступне оновлення',
-        'btn_learn_more': 'Дізнатися більше',
-        'features_title': 'Переваги лаунчера',
-        'feat_1_title': '⚡ Висока швидкість',
-        'feat_1_desc': 'Оптимізований запуск і мінімальне споживання ресурсів системи.',
-        'feat_2_title': '🧩 Підтримка модів',
-        'feat_2_desc': 'Зручне керування збірками, модами та модифікаторами в один клік.',
-        'feat_3_title': '🛡️ Надійність',
-        'feat_3_desc': 'Стабільні оновлення та повна безпека ваших даних.',
-
-        'custom_title': 'ПОВНА КАСТОМІЗАЦІЯ',
-        'custom_desc': 'Налаштовуйте кожен піксель лаунчера під свій стиль та зручність.',
-        'custom_th_param': 'Параметр',
-        'custom_th_desc': 'Опис можливості',
-        'custom_row1_title': 'Теми оформлення',
-        'custom_row1_desc': 'Повна зміна колірної палітри, підтримка темної та світлої теми, користувацькі акценти.',
-        'custom_row2_title': 'Віджети та панелі',
-        'custom_row2_desc': 'Вільне налаштування розташування елементів, приховування зайвих блоків та гнучкий інтерфейс.',
-        'custom_row3_title': 'Персоналізація',
-        'custom_row3_desc': 'Завантаження власних фонів, кастомні іконки профілю та унікальні ефекти переходів.',
-
-        'modules_title': 'Гнучка модульна сітка',
-        'modules_desc': 'Перетягуйте блоки, змінюйте форму модулів та адаптуйте робочий простір під свої потреби.',
-        'mod_feat_1': '✨ Перенесення блоків Drag & Drop',
-        'mod_feat_2': '📐 Зміна форми та розміру',
-        'mod_feat_3': '🎨 Налаштування прозорості панелей',
-
-        'comp_title': 'Чому саме Mace Launcher?',
-        'comp_feature': 'Можливість',
-        'comp_mace': 'Mace Launcher',
-        'comp_others': 'Інші лаунчери',
-        'comp_row1': 'Швидкість запуску',
-        'comp_row1_mace': '⚡ 1.5 секунди',
-        'comp_row1_oth': 'Повільно',
-        'comp_row2': 'Телеметрія ПК (CPU/RAM)',
-        'comp_row2_mace': '✅ Вбудована',
-        'comp_row2_oth': '❌ Відсутня',
-        'comp_row3': 'Пошук по Modrinth API',
-        'comp_row3_mace': '✅ Прямо в лаунчері',
-        'comp_row3_oth': '⚠️ Частково / Вручную',
-        'comp_row4': 'Автоналаштування Java',
-        'comp_row4_mace': '✅ Повністю авто',
-        'comp_row4_oth': '⚠️ Частково / Вручную',
-
-        'comb_title': 'Безпека, Системні вимоги та Часті запитання',
-        'sec_title': '100% Безпека',
-        'sec_1_title': 'Без вірусів',
-        'sec_1_desc': 'Чистий інсталятор без стороннього софту та реклами.',
-        'sec_2_title': 'Шифрування даних',
-        'sec_2_desc': 'Токени авторизації та профілі зберігаються в зашифрованому вигляді.',
-
-        'sys_title': 'Системні вимоги',
-        'sys_os_title': 'Операційна система',
-        'sys_os_desc': 'Windows 10 / 11 (64-bit)',
-        'sys_cpu_title': 'Процесор',
-        'sys_cpu_desc': 'Intel Core i3 / AMD Ryzen 3 або краще',
-        'sys_ram_title': 'Оперативна пам\'ять',
-        'sys_ram_desc': '4 ГБ (рекомендовано 8 ГБ)',
-        'sys_java_title': 'Середовище Java',
-        'sys_java_desc': 'Вбудована (Автоматичне налаштування)',
-
-        'faq_title': 'Часті запитання',
-        'faq_q1': 'Чи безкоштовний Mace Launcher?',
-        'faq_a1': 'Так, Mace Launcher на 100% безкоштовний для всіх гравців.',
-        'faq_q2': 'Чи підтримує він моди та модлоадери?',
-        'faq_a2': 'Звісно! Вбудовано повну підтримку Fabric, Forge, NeoForge та кастомних збірок.',
-        'faq_q3': 'Як виділити більше оперативної пам\'яті?',
-        'faq_a3': 'Перейди в Налаштування лаунчера -> Виділення пам\'яті -> Посунь повзунок на потрібний обсяг ОЗП.',
-
-        'update_modal_title': 'Інструкція з оновлення',
-        'update_step1': '1. Встановіть файл оновлень.',
-        'update_step2': '2. Покладіть файл оновлення в папку updates в кореневу папку Mace Launcher ("Mace Launcher\\updates").',
-        'update_step3': '3. Запустіть Mace Launcher.',
-        'update_step4': '4. Дотримуйтесь інструкцій у вікні, що відкрилося.',
-        'update_btn_download': 'Завантажити файл оновлень',
-
-        'patch_title': 'Історія оновлень',
-        'patch_title_prefix': 'Версия',
-        'patch_current': '(Поточна)',
-
-        'how_title': 'Як почати грати за 3 кроки',
-        'step_1_title': '1. Завантаж',
-        'step_1_desc': 'Скачай офіційний MaceInstaller.exe за кнопкою вище.',
-        'step_2_title': '2. Встанови',
-        'step_2_desc': 'Запусти інсталятор та дотримуйся простих підказок.',
-        'step_3_title': '3. Грай',
-        'step_3_desc': 'Обирай улюблену версію чи збірку модів та поринай у гру!',
-
-        'modal_title': 'Дякуємо за завантаження!',
-        'modal_desc': 'Завантаження розпочнеться автоматично. Після завершення відкрийте MaceInstaller.exe.',
-        'modal_close': 'Зрозуміло',
-        'footer_rights': '© 2026 Mace Launcher. Усі права захищено.',
-        'footer_disclaimer': 'Mace Launcher не є офіційним продуктом Mojang.',
-        'footer_discord': 'Наш Discord'
-    }
-}
-
-LANGUAGES = {
-    'en': {'name': 'English', 'flag': '🇬🇧'},
-    'ru': {'name': 'Русский', 'flag': '🇷🇺'},
-    'uk': {'name': 'Українська', 'flag': '🇺🇦'}
-}
-
-# ================= GOOGLE SEARCH CONSOLE =================
-@app.route('/google12eaad2a9b203569.html')
-def google_verification():
-    return send_from_directory(
-        app.root_path,
-        'google12eaad2a9b203569.html'
-    )
-@app.route('/sitemap.xml')
-def sitemap():
-    response = make_response(
-        """<?xml version="1.0" encoding="UTF-8"?>
-<urlset>
-    <url>
-        <loc>https://mace-launcher.onrender.com/</loc>
-    </url>
-    <url>
-        <loc>https://mace-launcher.onrender.com/ai</loc>
-    </url>
-</urlset>"""
-    )
-    response.headers['Content-Type'] = 'application/xml'
-    return response
-@app.route('/')
-def index():
-    theme = request.args.get('theme', 'black')
-    lang = request.args.get('lang', 'en')
-    
-    if lang not in TRANSLATIONS:
-        lang = 'en'
-
-    css_file = 'stile-black-theme.css' if theme == 'black' else 'stile-light-theme.css'
-    
-    db = get_db()
-    cur = db.execute('SELECT * FROM Mace ORDER BY id DESC')
-    updates = cur.fetchall()
-    
-    current_version = get_latest_version()
-
-    user_downloaded = request.cookies.get('user_downloaded') == 'true'
-    user_version = request.cookies.get('user_version', '0.0.0')
-    
-    # Кнопка оновлення показується тільки якщо користувач вже скачував і його версія відрізняється від актуальної
-    show_updates_button = user_downloaded and user_version != current_version
-    downloads_count = get_download_count()
-
-    return render_template(
-        'index.html',
-        css_file=css_file,
-        current_theme=theme,
-        current_lang=lang,
-        t=TRANSLATIONS[lang],
-        languages=LANGUAGES,
-        downloads_count=downloads_count,
-        show_updates_button=show_updates_button,
-        current_version=current_version,
-        updates=updates
-    )
-
-@app.route('/download/installer/<path:filename>')
-def download_installer(filename):
-    installer_dir = os.path.join(app.root_path, 'Mace Installer')
-    file_path = os.path.join(installer_dir, filename)
-    if not os.path.exists(file_path):
-        return f"File not found at: {file_path}", 404
-
-    increment_download_count()
-    current_version = get_latest_version()
-
-    response = make_response(send_from_directory(installer_dir, filename, as_attachment=True))
-    response.set_cookie('user_downloaded', 'true', max_age=315360000)
-    response.set_cookie('user_version', current_version, max_age=315360000)
-    return response
-
-@app.route('/download/update/<path:filename>')
-def download_update(filename):
-    update_dir = os.path.join(app.root_path, 'update')
-    file_path = os.path.join(update_dir, filename)
-    if not os.path.exists(file_path):
-        return f"File not found at: {file_path}", 404
-
-    current_version = get_latest_version()
-    response = make_response(send_from_directory(update_dir, filename, as_attachment=True))
-    response.set_cookie('user_downloaded', 'true', max_age=315360000)
-    response.set_cookie('user_version', current_version, max_age=315360000)
-    return response
-
-@app.route('/admin', methods=['GET', 'POST'])
-def admin_panel():
-    msg = ""
-    status_type = "info"
-    
-    if request.method == 'POST':
-        action = request.form.get('action')
-        
-        if action == 'login':
-            password = request.form.get('password', '')
-            hashed_input = hashlib.sha256(password.encode('utf-8')).hexdigest()
-            if hashed_input == ADMIN_PASSWORD_HASH:
-                session['admin_logged_in'] = True
-                msg = "Successfully logged in!"
-                status_type = "success"
-            else:
-                msg = "Invalid admin password SHA-256 hash!"
-                status_type = "error"
-
-        elif action == 'upload' and session.get('admin_logged_in'):
-            upload_type = request.form.get('upload_type')
-            file = request.files.get('file')
-
-            if file and file.filename != '':
-                target_dir = os.path.join(app.root_path, 'Mace Installer') if upload_type == 'installer' else os.path.join(app.root_path, 'update')
-                os.makedirs(target_dir, exist_ok=True)
-                
-                file_path = os.path.join(target_dir, file.filename)
-                file.save(file_path)
-
-                success, git_msg = git_push_changes(f"Admin uploaded new {upload_type}: {file.filename}")
-                if success:
-                    msg = f"File {file.filename} uploaded successfully and pushed to GitHub!"
-                    status_type = "success"
-                else:
-                    msg = f"File uploaded locally, but Git Push failed: {git_msg}"
-                    status_type = "warning"
-            else:
-                msg = "No file selected!"
-                status_type = "error"
-
-        elif action == 'add_patch' and session.get('admin_logged_in'):
-            version = request.form.get('version', '').strip()
-            desc_en = request.form.get('desc_en', '').strip()
-            desc_ru = request.form.get('desc_ru', '').strip()
-            desc_uk = request.form.get('desc_uk', '').strip()
-
-            if version and desc_en and desc_ru and desc_uk:
-                db = get_db()
-                db.execute('INSERT INTO Mace (version, desc_en, desc_ru, desc_uk) VALUES (?, ?, ?, ?)', 
-                           (version, desc_en, desc_ru, desc_uk))
-                db.commit()
-
-                success, git_msg = git_push_changes(f"Admin added update patch v{version} to history")
-                if success:
-                    msg = f"Update v{version} added successfully to Mace table and pushed to GitHub!"
-                    status_type = "success"
-                else:
-                    msg = f"Update saved to Mace.db successfully, but Git push failed: {git_msg}"
-                    status_type = "warning"
-            else:
-                msg = "Please fill in all version and description fields!"
-                status_type = "error"
-
-        elif action == 'logout':
-            session.pop('admin_logged_in', None)
-            return redirect(url_for('admin_panel'))
-
-    logged_in = session.get('admin_logged_in', False)
-    return render_template('admin.html', logged_in=logged_in, msg=msg, status_type=status_type)
-
-if __name__ == '__main__':
-    app.run(debug=False, host='0.0.0.0', port=int(os.environ.get('PORT', '5000')))
+<!DOCTYPE html>
+<html lang="{{ current_lang }}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="mace-api-base" content="{{ mace_host_url }}">
+    <title>{{ t.title }}</title>
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='icon.png') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename=css_file) }}">
+</head>
+<body>
+    <header class="navbar animate-fade-down">
+        <div class="logo">
+            <span class="logo-icon">Ⓜ️</span> Mace Launcher
+        </div>
+        <nav class="nav-links">
+            <a href="#features">{{ t.nav_features }}</a>
+            <a href="#customization">{{ t.nav_customization }}</a>
+            <a href="#modloaders">{{ t.nav_modloaders }}</a>
+            <a href="#compare">{{ t.nav_compare }}</a>
+            <a href="#updates">{{ t.nav_updates }}</a>
+            <a href="#combined-info">{{ t.nav_faq }}</a>
+        </nav>
+        <div class="header-controls">
+            <a id="site-login-link" href="/login?lang={{ current_lang }}&theme={{ current_theme }}" class="btn-login">Войти</a>
+            <a id="site-register-link" href="/register?lang={{ current_lang }}&theme={{ current_theme }}" class="btn-register">Зарегистрироваться</a>
+            <div class="lang-dropdown">
+                <button class="lang-btn">
+                    <span>{{ languages[current_lang].flag }}</span>
+                    <span>{{ languages[current_lang].name }}</span>
+                    <span class="arrow">▼</span>
+                </button>
+                <div class="lang-menu">
+                    {% for code, lang_info in languages.items() %}
+                        <a href="/?lang={{ code }}&theme={{ current_theme }}" class="lang-item {% if code == current_lang %}active{% endif %}">
+                            <span class="flag">{{ lang_info.flag }}</span>
+                            <span class="lang-name">{{ lang_info.name }}</span>
+                        </a>
+                    {% endfor %}
+                </div>
+            </div>
+            <div class="theme-toggle">
+                {% if current_theme == 'black' %}
+                    <a href="/?theme=light&lang={{ current_lang }}" class="btn-theme">{{ t.theme_light }}</a>
+                {% else %}
+                    <a href="/?theme=black&lang={{ current_lang }}" class="btn-theme">{{ t.theme_dark }}</a>
+                {% endif %}
+            </div>
+        </div>
+    </header>
+    <main class="hero">
+        <div class="hero-content animate-fade-up">
+            <h1>{{ t.hero_title }}</h1>
+            <p>{{ t.hero_desc }}</p>
+            <div class="download-counter-badge">
+                📥 {{ t.downloads_count }}: <strong>{{ downloads_count }}</strong>
+            </div>
+            <div id="mace-server-status" role="status" style="display:inline-flex;align-items:center;gap:8px;margin-top:12px;padding:8px 12px;border:1px solid rgba(0,217,255,.2);border-radius:999px;background:rgba(0,217,255,.06);color:#aebfd0;font-size:12px;">
+                <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#91a2b5;"></span>
+                <span id="mace-server-status-text">Проверяем подключение к Mace Accounts…</span>
+            </div>
+            <div class="cta-buttons">
+                <a href="/download/installer/MaceInstaller.exe" onclick="showDownloadModal(event)" class="btn btn-primary pulse-hover">{{ t.btn_download }}</a>
+                {% if show_updates_button %}
+                    <button onclick="openUpdateModal()" class="btn btn-update pulse-hover">🔄 {{ t.btn_updates }}</button>
+                {% endif %}
+                <a href="#features" class="btn btn-secondary">{{ t.btn_learn_more }}</a>
+            </div>
+            <div class="hero-image-container animate-fade-up">
+                <img src="{{ url_for('static', filename='images/imglauncher.png') }}" alt="Mace Launcher Preview" class="launcher-preview">
+            </div>
+        </div>
+    </main>
+    <section id="features" class="features-section">
+        <h2 class="animate-fade-up">{{ t.features_title }}</h2>
+        <div class="cards-grid">
+            <div class="card card-anim-1">
+                <h3>{{ t.feat_1_title }}</h3>
+                <p>{{ t.feat_1_desc }}</p>
+            </div>
+            <div class="card card-anim-2">
+                <h3>{{ t.feat_2_title }}</h3>
+                <p>{{ t.feat_2_desc }}</p>
+            </div>
+            <div class="card card-anim-3">
+                <h3>{{ t.feat_3_title }}</h3>
+                <p>{{ t.feat_3_desc }}</p>
+            </div>
+        </div>
+    </section>
+    <section id="customization" class="section-container alt-bg">
+        <h2 class="text-center">{{ t.custom_title }}</h2>
+        <p class="section-desc text-center">{{ t.custom_desc }}</p>
+        <div class="customization-split">
+            <div class="custom-table-col">
+                <div class="table-wrapper">
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th>{{ t.custom_th_param }}</th>
+                                <th>{{ t.custom_th_desc }}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td class="active-col">{{ t.custom_row1_title }}</td>
+                                <td>{{ t.custom_row1_desc }}</td>
+                            </tr>
+                            <tr>
+                                <td class="active-col">{{ t.custom_row2_title }}</td>
+                                <td>{{ t.custom_row2_desc }}</td>
+                            </tr>
+                            <tr>
+                                <td class="active-col">{{ t.custom_row3_title }}</td>
+                                <td>{{ t.custom_row3_desc }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="custom-showcase-container">
+                <img id="imgCustom2" src="{{ url_for('static', filename='images/imglauncher2.png') }}" alt="Customization Preview 2" class="custom-card front">
+                <img id="imgCustom3" src="{{ url_for('static', filename='images/imglauncher3.png') }}" alt="Customization Preview 3" class="custom-card back">
+            </div>
+        </div>
+        <div class="modules-showcase-container">
+            <div class="modules-info">
+                <h3>{{ t.modules_title }}</h3>
+                <p>{{ t.modules_desc }}</p>
+                <div class="modules-features-list">
+                    <span class="module-chip">{{ t.mod_feat_1 }}</span>
+                    <span class="module-chip">{{ t.mod_feat_2 }}</span>
+                    <span class="module-chip">{{ t.mod_feat_3 }}</span>
+                </div>
+            </div>
+            <div class="modules-preview-wrapper">
+                <img src="{{ url_for('static', filename='images/imglauncher4.png') }}" alt="Modules Layout Preview" class="modules-img">
+            </div>
+        </div>
+    </section>
+    <section id="compare" class="section-container alt-bg">
+        <h2>{{ t.comp_title }}</h2>
+        <div class="table-wrapper">
+            <table class="compare-table">
+                <thead>
+                    <tr>
+                        <th>{{ t.comp_feature }}</th>
+                        <th class="active-col">Mace Launcher</th>
+                        <th>{{ t.comp_others }}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>{{ t.comp_row1 }}</td>
+                        <td class="active-col">{{ t.comp_row1_mace }}</td>
+                        <td>{{ t.comp_row1_oth }}</td>
+                    </tr>
+                    <tr>
+                        <td>{{ t.comp_row2 }}</td>
+                        <td class="active-col">{{ t.comp_row2_mace }}</td>
+                        <td>{{ t.comp_row2_oth }}</td>
+                    </tr>
+                    <tr>
+                        <td>{{ t.comp_row3 }}</td>
+                        <td class="active-col">{{ t.comp_row3_mace }}</td>
+                        <td>{{ t.comp_row3_oth }}</td>
+                    </tr>
+                    <tr>
+                        <td>{{ t.comp_row4 }}</td>
+                        <td class="active-col">{{ t.comp_row4_mace }}</td>
+                        <td>{{ t.comp_row4_oth }}</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+    <section id="updates" class="section-container">
+        <h2>{{ t.patch_title }}</h2>
+        <div class="timeline">
+            {% for update in updates %}
+            <div class="timeline-item">
+                <div class="timeline-badge">v{{ update.version }}</div>
+                <div class="timeline-content">
+                    <h3>{{ t.patch_title_prefix }} {{ update.version }} {% if loop.first %}{{ t.patch_current }}{% endif %}</h3>
+                    <p>
+                        {% if current_lang == 'en' %}{{ update.desc_en }}
+                        {% elif current_lang == 'ru' %}{{ update.desc_ru }}
+                        {% else %}{{ update.desc_uk }}
+                        {% endif %}
+                    </p>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </section>
+    <section id="how-to-start" class="section-container alt-bg">
+        <h2>{{ t.how_title }}</h2>
+        <div class="steps-grid">
+            <div class="step-card">
+                <div class="step-icon">📥</div>
+                <h3>{{ t.step_1_title }}</h3>
+                <p>{{ t.step_1_desc }}</p>
+            </div>
+            <div class="step-card">
+                <div class="step-icon">⚙️</div>
+                <h3>{{ t.step_2_title }}</h3>
+                <p>{{ t.step_2_desc }}</p>
+            </div>
+            <div class="step-card">
+                <div class="step-icon">🎮</div>
+                <h3>{{ t.step_3_title }}</h3>
+                <p>{{ t.step_3_desc }}</p>
+            </div>
+        </div>
+    </section>
+    <section id="combined-info" class="section-container">
+        <h2 class="text-center">{{ t.comb_title }}</h2>
+        <div class="single-column-wrapper">
+            <div class="combined-block">
+                <h3>🛡️ {{ t.sec_title }}</h3>
+                <div class="cards-grid">
+                    <div class="card">
+                        <h4>{{ t.sec_1_title }}</h4>
+                        <p>{{ t.sec_1_desc }}</p>
+                    </div>
+                    <div class="card">
+                        <h4>{{ t.sec_2_title }}</h4>
+                        <p>{{ t.sec_2_desc }}</p>
+                    </div>
+                </div>
+            </div>
+            <div class="combined-block">
+                <h3>💻 {{ t.sys_title }}</h3>
+                <div class="sys-grid">
+                    <div class="sys-item">
+                        <span class="sys-label">{{ t.sys_os_title }}</span>
+                        <span class="sys-val">{{ t.sys_os_desc }}</span>
+                    </div>
+                    <div class="sys-item">
+                        <span class="sys-label">{{ t.sys_cpu_title }}</span>
+                        <span class="sys-val">{{ t.sys_cpu_desc }}</span>
+                    </div>
+                    <div class="sys-item">
+                        <span class="sys-label">{{ t.sys_ram_title }}</span>
+                        <span class="sys-val">{{ t.sys_ram_desc }}</span>
+                    </div>
+                    <div class="sys-item">
+                        <span class="sys-label">{{ t.sys_java_title }}</span>
+                        <span class="sys-val">{{ t.sys_java_desc }}</span>
+                    </div>
+                </div>
+            </div>
+            <div class="combined-block">
+                <h3>❓ {{ t.faq_title }}</h3>
+                <div class="faq-accordion">
+                    <details class="faq-item">
+                        <summary class="faq-question">{{ t.faq_q1 }}</summary>
+                        <div class="faq-answer"><p>{{ t.faq_a1 }}</p></div>
+                    </details>
+                    <details class="faq-item">
+                        <summary class="faq-question">{{ t.faq_q2 }}</summary>
+                        <div class="faq-answer"><p>{{ t.faq_a2 }}</p></div>
+                    </details>
+                    <details class="faq-item">
+                        <summary class="faq-question">{{ t.faq_q3 }}</summary>
+                        <div class="faq-answer"><p>{{ t.faq_a3 }}</p></div>
+                    </details>
+                </div>
+            </div>
+        </div>
+    </section>
+    <footer id="download" class="footer">
+        <div class="footer-content">
+            <span class="footer-rights">{{ t.footer_rights }}</span>
+            <span class="footer-divider">•</span>
+            <span class="footer-disclaimer">{{ t.footer_disclaimer }}</span>
+            <span class="footer-divider">•</span>
+            <a href="https://discord.gg" target="_blank" class="footer-link">💬 {{ t.footer_discord }}</a>
+        </div>
+    </footer>
+    <div id="downloadModal" class="modal-backdrop">
+        <div class="modal-box">
+            <h3>🎉 {{ t.modal_title }}</h3>
+            <p>{{ t.modal_desc }}</p>
+            <button class="btn btn-primary" onclick="closeDownloadModal()">{{ t.modal_close }}</button>
+        </div>
+    </div>
+    <div id="updateModal" class="modal-backdrop">
+        <div class="modal-box update-modal-box">
+            <h3>🚀 {{ t.update_modal_title }} (v{{ current_version }})</h3>
+            <div class="update-instructions">
+                <p>{{ t.update_step1 }}</p>
+                <p>{{ t.update_step2 }}</p>
+                <p>{{ t.update_step3 }}</p>
+                <p>{{ t.update_step4 }}</p>
+            </div>
+            <div class="update-info-box">
+                <h4>{{ t.patch_title_prefix }} {{ current_version }}</h4>
+                <p>
+                    {% if updates %}
+                        {% if current_lang == 'en' %}{{ updates[0].desc_en }}
+                        {% elif current_lang == 'ru' %}{{ updates[0].desc_ru }}
+                        {% else %}{{ updates[0].desc_uk }}
+                        {% endif %}
+                    {% endif %}
+                </p>
+            </div>
+            <div class="modal-buttons">
+                <a href="/download/update/MaceUpdate.bin" class="btn btn-primary">{{ t.update_btn_download }}</a>
+                <button class="btn btn-secondary" onclick="closeUpdateModal()">{{ t.modal_close }}</button>
+            </div>
+        </div>
+    </div>
+    <script>
+        function showDownloadModal(event) {
+            event.preventDefault();
+            const downloadUrl = event.currentTarget.getAttribute('href');
+            document.getElementById('downloadModal').classList.add('active');
+            setTimeout(() => {
+                window.location.href = downloadUrl;
+            }, 300);
+        }
+        function closeDownloadModal() {
+            document.getElementById('downloadModal').classList.remove('active');
+            location.reload();
+        }
+        function openUpdateModal() {
+            document.getElementById('updateModal').classList.add('active');
+        }
+        function closeUpdateModal() {
+            document.getElementById('updateModal').classList.remove('active');
+        }
+        const img2 = document.getElementById('imgCustom2');
+        const img3 = document.getElementById('imgCustom3');
+        function swapCustomCards() {
+            if (img2 && img3) {
+                if (img2.classList.contains('front')) {
+                    img2.classList.remove('front');
+                    img2.classList.add('back');
+                    img3.classList.remove('back');
+                    img3.classList.add('front');
+                } else {
+                    img2.classList.remove('back');
+                    img2.classList.add('front');
+                    img3.classList.remove('front');
+                    img3.classList.add('back');
+                }
+            }
+        }
+        setInterval(swapCustomCards, 7000);
+        // Keep the header in sync with the API session stored by the account pages.
+        (function updateAccountLinks() {
+            const loginLink = document.getElementById('site-login-link');
+            const registerLink = document.getElementById('site-register-link');
+            const token = localStorage.getItem('mace_access_token');
+            if (!loginLink || !registerLink || !token) return;
+            loginLink.textContent = 'Профиль';
+            loginLink.href = '/profile';
+            registerLink.textContent = 'Выйти';
+            registerLink.href = '#';
+            registerLink.addEventListener('click', async event => {
+                event.preventDefault();
+                try {
+                    const apiBase = document.querySelector('meta[name="mace-api-base"]')?.content?.replace(/\/+$/, '');
+                    if (apiBase) await fetch(`${apiBase}/logout`, {method:'POST',headers:{'Authorization':'Bearer '+token,'Accept':'application/json'}});
+                } catch (_) { /* Clear the local session even if the server is offline. */ }
+                localStorage.removeItem('mace_access_token');
+                window.location.reload();
+            });
+        })();
+        // The API address is injected by Flask from mace_server.txt.
+        (async function checkMaceAccounts() {
+            const status = document.getElementById('mace-server-status');
+            if (!status) return;
+            const dot = status.querySelector('span');
+            const apiBase = document.querySelector('meta[name="mace-api-base"]')?.content?.replace(/\/+$/, '');
+            try {
+                if (!apiBase) throw new Error('API URL is not configured');
+                const controller = new AbortController();
+                const timer = setTimeout(() => controller.abort(), 3500);
+                const response = await fetch(`${apiBase}/health`, { headers: { 'Accept': 'application/json' }, signal: controller.signal });
+                clearTimeout(timer);
+                if (!response.ok) throw new Error('API is offline');
+                const data = await response.json();
+                if (!data.ok) throw new Error('API is offline');
+                document.getElementById('mace-server-status-text').textContent = 'Mace Accounts: сервер онлайн';
+                if (dot) dot.style.background = '#65e0ad';
+                status.style.borderColor = 'rgba(101,224,173,.3)';
+            } catch (_) {
+                document.getElementById('mace-server-status-text').textContent = 'Mace Accounts: сервер недоступен';
+                if (dot) dot.style.background = '#ff7f91';
+                status.style.borderColor = 'rgba(255,127,145,.3)';
+                status.title = 'Проверьте адрес в mace_server.txt и доступность сервера.';
+            }
+        })();
+    </script>
+</body>
+</html>
