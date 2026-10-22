@@ -2,7 +2,7 @@ import os
 import hashlib
 import subprocess
 import sqlite3
-from flask import Flask, render_template, send_from_directory, request, redirect, url_for, session, make_response, g
+from flask import Flask, render_template, send_from_directory, request, redirect, url_for, session, make_response, g, jsonify
 from mace_api_client import read_server_url
 
 app = Flask(
@@ -14,7 +14,7 @@ app.secret_key = os.environ.get('MACE_FLASK_SECRET_KEY') or hashlib.sha256(os.ur
 
 ADMIN_PASSWORD_HASH = "1b24fbfacd5b57d04c0b955d4440299abca943cc36aed243bb0523571e2c8cd6"
 GIT_REPO_URL = "https://github.com/Kwvanty/Mace-Launcher.git"
-DATABASE = 'mace.db'
+DATABASE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'mace.db')
 
 # ================= РОБОТА З БАЗОЮ ДАНИХ =================
 def get_db():
@@ -91,7 +91,14 @@ init_db()
 # and the desktop launcher. Read it per request so edits take effect immediately.
 @app.context_processor
 def inject_mace_account_settings():
-    return {"mace_host_url": read_server_url(os.path.join(app.root_path, "mace_server.txt"))}
+    # Render/public hosting can set MACE_API_BASE; if absent, use the text file.
+    # The TXT remains the normal source of truth for local/self-hosted installs.
+    configured_api = (os.environ.get("MACE_API_BASE") or "").strip()
+    api_url = read_server_url(os.path.join(app.root_path, "mace_server.txt"))
+    if configured_api:
+        from mace_api_client import normalize_server_address
+        api_url = normalize_server_address(configured_api)
+    return {"mace_host_url": api_url}
 
 
 def _account_template_context():
@@ -108,19 +115,33 @@ def _account_template_context():
     }
 
 
-@app.route("/login", methods=["GET"])
+@app.route("/login", methods=["GET"], strict_slashes=False)
 def login_page():
+    """Serve the website login form (the API POST lives on MaceHost)."""
     return render_template("login.html", **_account_template_context())
 
 
-@app.route("/register", methods=["GET"])
+@app.route("/register", methods=["GET"], strict_slashes=False)
 def register_page():
+    """Serve the website registration form."""
     return render_template("register.html", **_account_template_context())
 
 
-@app.route("/profile", methods=["GET"])
+@app.route("/profile", methods=["GET"], strict_slashes=False)
 def account_profile_page():
+    """Serve the authenticated account/social page; auth is checked by the API."""
     return render_template("profile.html", **_account_template_context())
+
+
+@app.route("/site-health", methods=["GET"])
+def site_health():
+    """Small deployment probe to confirm that Render is running the updated app."""
+    return jsonify({
+        "ok": True,
+        "service": "Mace Launcher Website",
+        "version": "accounts-routes-2026-10-22",
+        "routes": {"login": url_for("login_page"), "register": url_for("register_page"), "profile": url_for("account_profile_page")},
+    })
 
 
 def get_download_count():
@@ -653,4 +674,4 @@ def admin_panel():
     return render_template('admin.html', logged_in=logged_in, msg=msg, status_type=status_type)
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(debug=False, host='0.0.0.0', port=int(os.environ.get('PORT', '5000')))
