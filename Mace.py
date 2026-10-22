@@ -3,13 +3,14 @@ import hashlib
 import subprocess
 import sqlite3
 from flask import Flask, render_template, send_from_directory, request, redirect, url_for, session, make_response, g
+from mace_api_client import read_server_url
 
 app = Flask(
     __name__,
     template_folder='templates',
     static_folder='static'
 )
-app.secret_key = 'mace_launcher_super_secret_key_change_me'
+app.secret_key = os.environ.get('MACE_FLASK_SECRET_KEY') or hashlib.sha256(os.urandom(32)).hexdigest()
 
 ADMIN_PASSWORD_HASH = "1b24fbfacd5b57d04c0b955d4440299abca943cc36aed243bb0523571e2c8cd6"
 GIT_REPO_URL = "https://github.com/Kwvanty/Mace-Launcher.git"
@@ -85,6 +86,42 @@ def init_db():
         db.commit()
 
 init_db()
+
+# Account API URL is configured in one plain-text file shared by the website
+# and the desktop launcher. Read it per request so edits take effect immediately.
+@app.context_processor
+def inject_mace_account_settings():
+    return {"mace_host_url": read_server_url(os.path.join(app.root_path, "mace_server.txt"))}
+
+
+def _account_template_context():
+    theme = request.args.get("theme", "black")
+    if theme not in ("black", "light"):
+        theme = "black"
+    lang = request.args.get("lang", "en")
+    if lang not in TRANSLATIONS:
+        lang = "en"
+    return {
+        "css_file": "stile-black-theme.css" if theme == "black" else "stile-light-theme.css",
+        "current_theme": theme,
+        "current_lang": lang,
+    }
+
+
+@app.route("/login", methods=["GET"])
+def login_page():
+    return render_template("login.html", **_account_template_context())
+
+
+@app.route("/register", methods=["GET"])
+def register_page():
+    return render_template("register.html", **_account_template_context())
+
+
+@app.route("/profile", methods=["GET"])
+def account_profile_page():
+    return render_template("profile.html", **_account_template_context())
+
 
 def get_download_count():
     db = get_db()
