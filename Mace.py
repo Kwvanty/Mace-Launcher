@@ -96,8 +96,8 @@ init_db()
 # cross-origin browser/CORS failures and lets the site return a useful JSON error
 # if MaceHost itself cannot be reached. The desktop launcher still talks to MaceHost
 # directly through mace_api_client.py.
-PUBLIC_MACE_API_BASE = "https://macehost.hostless.app"
-BROWSER_MACE_API_BASE = "/api/mace"
+PUBLIC_MACE_API_BASE = "macehost.hostless.app"
+BROWSER_MACE_API_BASE = ""
 
 
 def _mace_upstream_base():
