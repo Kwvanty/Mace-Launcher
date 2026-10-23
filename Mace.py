@@ -97,7 +97,7 @@ init_db()
 # if MaceHost itself cannot be reached. The desktop launcher still talks to MaceHost
 # directly through mace_api_client.py.
 PUBLIC_MACE_API_BASE = "https://macehost.hostless.app"
-BROWSER_MACE_API_BASE = ""
+BROWSER_MACE_API_BASE = "/api/mace"
 
 
 def _mace_upstream_base():
@@ -165,9 +165,13 @@ def _mace_proxy_path_allowed(path: str, method: str) -> bool:
 
 @app.route("/api/mace/<path:api_path>", methods=["GET", "POST", "DELETE"], strict_slashes=False)
 def mace_api_proxy(api_path):
-    """Proxy the small, allow-listed Mace Accounts API through the Flask site."""
+    """Proxy MaceHost API with bounded socket waits and diagnostic logs."""
     if not _mace_proxy_path_allowed(api_path, request.method):
-        return jsonify({"detail": "Mace API endpoint or method is not allowed."}), 404
+        return jsonify({
+            "ok": False,
+            "detail": "Mace API endpoint or method is not allowed.",
+            "endpoint": api_path,
+        }), 404
 
     base = _mace_upstream_base()
     upstream_url = base + "/" + api_path
@@ -176,16 +180,20 @@ def mace_api_proxy(api_path):
 
     headers = {
         "Accept": request.headers.get("Accept", "application/json"),
-        "User-Agent": "MaceLauncher-Website-Proxy/1.0",
+        "User-Agent": "MaceLauncher-Website-Proxy/1.1",
+        "Connection": "close",
     }
     authorization = request.headers.get("Authorization")
     if authorization:
         headers["Authorization"] = authorization
 
     body = None
-    if request.method in {"POST", "DELETE"} and request.get_data(cache=True):
-        body = request.get_data(cache=True)
-        headers["Content-Type"] = request.headers.get("Content-Type", "application/json")
+    if request.method in {"POST", "DELETE"}:
+        body = request.get_data(cache=True) or None
+        if body is not None:
+            headers["Content-Type"] = request.headers.get(
+                "Content-Type", "application/json"
+            )
 
     upstream_request = urllib.request.Request(
         upstream_url,
@@ -193,28 +201,64 @@ def mace_api_proxy(api_path):
         headers=headers,
         method=request.method,
     )
+
+    app.logger.warning(
+        "MaceHost proxy START method=%s endpoint=%s upstream=%s",
+        request.method, api_path, base
+    )
+
     try:
-        with urllib.request.urlopen(upstream_request, timeout=18) as upstream:
+        with urllib.request.urlopen(upstream_request, timeout=8) as upstream:
             content = upstream.read()
             status = upstream.status
-            content_type = upstream.headers.get("Content-Type", "application/json")
+            content_type = upstream.headers.get(
+                "Content-Type", "application/json"
+            )
+
+        app.logger.warning(
+            "MaceHost proxy OK endpoint=%s status=%s bytes=%s",
+            api_path, status, len(content)
+        )
+
     except urllib.error.HTTPError as exc:
-        # API validation errors (400/401/409/422) are valid API responses;
-        # forward their status and JSON body unchanged so the form can explain them.
-        content = exc.read()
+        # HTTP errors such as 400/401/409/422 are valid API responses.
+        try:
+            content = exc.read()
+        except (TimeoutError, OSError) as read_exc:
+            app.logger.warning(
+                "MaceHost proxy could not read HTTP error body endpoint=%s: %s",
+                api_path, read_exc
+            )
+            content = b'{"detail":"MaceHost returned an HTTP error."}'
         status = exc.code
-        content_type = exc.headers.get("Content-Type", "application/json")
+        content_type = exc.headers.get(
+            "Content-Type", "application/json"
+        )
+
+        app.logger.warning(
+            "MaceHost proxy HTTP ERROR endpoint=%s status=%s",
+            api_path, status
+        )
+
     except (urllib.error.URLError, TimeoutError, OSError) as exc:
-        app.logger.error("MaceHost proxy request failed for %s: %s", api_path, exc)
         reason = getattr(exc, "reason", exc)
+        app.logger.exception(
+            "MaceHost proxy FAILED endpoint=%s reason=%s",
+            api_path, reason
+        )
         return jsonify({
-            "detail": "Сайт доступен, но не может подключиться к MaceHost. Проверьте деплой API и его логи.",
+            "ok": False,
             "code": "MACEHOST_UNREACHABLE",
             "endpoint": api_path,
+            "detail": "The website could not reach MaceHost.",
             "reason": str(reason),
         }), 502
 
-    response = app.response_class(content, status=status, content_type=content_type)
+    response = app.response_class(
+        content,
+        status=status,
+        content_type=content_type,
+    )
     response.headers["Cache-Control"] = "no-store"
     response.headers["X-Content-Type-Options"] = "nosniff"
     return response
