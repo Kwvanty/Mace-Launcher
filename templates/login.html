@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Регистрация — Mace Launcher</title>
+    <title>Вход — Mace Launcher</title>
     <meta name="mace-api-base" content="{{ mace_host_url }}">
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='icon.png') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename=css_file) }}">
@@ -24,19 +24,17 @@
     <div class="account-page">
         <div class="account-card">
             <div class="account-logo">Ⓜ️ Mace Launcher</div>
-            <h1>Создать аккаунт</h1>
-            <p class="account-description">Единый аккаунт для Mace Launcher и будущих сервисов.</p>
-            <form id="registerForm">
-                <label for="username">Имя аккаунта</label>
-                <input type="text" id="username" autocomplete="username" placeholder="От 3 до 32 символов" minlength="3" maxlength="32" required>
-                <label for="email">Электронная почта</label>
-                <input type="email" id="email" autocomplete="email" placeholder="name@example.com" maxlength="254" required>
+            <h1>Вход</h1>
+            <p class="account-description">Войдите в аккаунт Mace Launcher</p>
+            <form id="loginForm">
+                <label for="username">Имя аккаунта или почта</label>
+                <input type="text" id="username" autocomplete="username" placeholder="Введите имя или почту" required>
                 <label for="password">Пароль</label>
-                <input type="password" id="password" autocomplete="new-password" placeholder="Не менее 8 символов" minlength="8" maxlength="256" required>
-                <button type="submit" class="account-submit" id="submitButton">Зарегистрироваться</button>
+                <input type="password" id="password" autocomplete="current-password" placeholder="Введите пароль" required>
+                <button type="submit" class="account-submit" id="submitButton">Войти</button>
             </form>
             <div id="message" class="account-message" role="status" aria-live="polite"></div>
-            <p class="account-switch">Уже есть аккаунт? <a id="loginLink" href="/login?lang={{ current_lang }}&theme={{ current_theme }}">Войти</a></p>
+            <p class="account-switch">Нет аккаунта? <a id="registerLink" href="/register?lang={{ current_lang }}&theme={{ current_theme }}">Зарегистрироваться</a></p>
             <a href="/?lang={{ current_lang }}&theme={{ current_theme }}" class="back-home">← Вернуться на главную</a>
             <div class="server-hint">API-адрес загружается из mace_server.txt: <span id="serverAddress"></span></div>
         </div>
@@ -96,25 +94,24 @@
         }
     }
 
-    preserveLauncherCallback('loginLink');
-    document.getElementById('registerForm').addEventListener('submit', async (event) => {
+    preserveLauncherCallback('registerLink');
+    document.getElementById('loginForm').addEventListener('submit', async (event) => {
         event.preventDefault();
         const username = document.getElementById('username').value.trim();
-        const email = document.getElementById('email').value.trim();
         const password = document.getElementById('password').value;
         submitButton.disabled = true;
-        showMessage('Создаём аккаунт…');
+        showMessage('Подключаемся к Mace Accounts…');
         try {
-            const response = await fetch(`${MACE_HOST}/register`, {
+            const response = await fetch(`${MACE_HOST}/login`, {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
-                body: JSON.stringify({username, email, password})
+                body: JSON.stringify({username, password})
             });
             const data = await response.json().catch(() => ({}));
-            if (!response.ok) throw new Error(data.detail || 'Не удалось создать аккаунт.');
+            if (!response.ok) throw new Error(data.detail || 'Не удалось войти в аккаунт.');
             if (!data.token || !data.mace_id) throw new Error('Сервер вернул неполный ответ.');
             localStorage.setItem('mace_access_token', data.token);
-            showMessage(`Аккаунт создан!\nИмя: ${data.username}\nMaceId: ${data.mace_id}`, 'success');
+            showMessage(`Добро пожаловать, ${data.username}!\nMaceId: ${data.mace_id}`, 'success');
             if (!returnTokenToLauncher(data.token)) window.location.href = '/profile';
         } catch (error) {
             showMessage(error.message || 'Не удалось подключиться к MaceHost. Проверьте адрес сервера.', 'error');
