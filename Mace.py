@@ -2,8 +2,13 @@ import os
 import hashlib
 import subprocess
 import sqlite3
+import re
+import urllib.error
+import urllib.parse
+import urllib.request
+from pathlib import Path
 from flask import Flask, render_template, send_from_directory, request, redirect, url_for, session, make_response, g, jsonify
-from mace_api_client import read_server_url
+from mace_api_client import normalize_server_address, read_server_url
 
 app = Flask(
     __name__,
@@ -87,18 +92,132 @@ def init_db():
 
 init_db()
 
-# Account API URL is configured in one plain-text file shared by the website
-# and the desktop launcher. Read it per request so edits take effect immediately.
+# Browser requests go through this site's same-origin proxy. That removes
+# cross-origin browser/CORS failures and lets the site return a useful JSON error
+# if MaceHost itself cannot be reached. The desktop launcher still talks to MaceHost
+# directly through mace_api_client.py.
+PUBLIC_MACE_API_BASE = "https://macehost.hostless.app"
+BROWSER_MACE_API_BASE = "/api/mace"
+
+
+def _mace_upstream_base():
+    """Resolve the upstream API URL, preferring env, then mace_server.txt.
+
+    The website has a public API fallback because a missing config file must not
+    silently make website visitors request their own computer's 127.0.0.1:8000.
+    A loopback URL is also invalid when the website is hosted on Render.
+    """
+    configured = (os.environ.get("MACE_API_BASE") or "").strip()
+    raw = configured
+    if not raw:
+        config_path = Path(app.root_path) / "mace_server.txt"
+        try:
+            if config_path.is_file():
+                for line in config_path.read_text(encoding="utf-8-sig").splitlines():
+                    line = line.strip()
+                    if line and not line.startswith("#"):
+                        raw = line
+                        break
+        except OSError:
+            app.logger.warning("Could not read mace_server.txt; using the public MaceHost URL")
+    if not raw:
+        raw = PUBLIC_MACE_API_BASE
+
+    base = normalize_server_address(raw).rstrip("/")
+    host = (urllib.parse.urlsplit(base).hostname or "").lower()
+    is_render_hosted = bool(os.environ.get("RENDER") or os.environ.get("RENDER_SERVICE_ID"))
+    if is_render_hosted and host in {"127.0.0.1", "localhost", "0.0.0.0", "::1"}:
+        app.logger.warning("MACE_API_BASE/mace_server.txt points to loopback on Render; using public MaceHost URL")
+        base = PUBLIC_MACE_API_BASE
+    return base
+
+
+# All templates that use `mace_host_url` now call a same-origin endpoint such as
+# /api/mace/login or /api/mace/health rather than fetching Hostless directly.
 @app.context_processor
 def inject_mace_account_settings():
-    # Render/public hosting can set MACE_API_BASE; if absent, use the text file.
-    # The TXT remains the normal source of truth for local/self-hosted installs.
-    configured_api = (os.environ.get("MACE_API_BASE") or "").strip()
-    api_url = read_server_url(os.path.join(app.root_path, "mace_server.txt"))
-    if configured_api:
-        from mace_api_client import normalize_server_address
-        api_url = normalize_server_address(configured_api)
-    return {"mace_host_url": api_url}
+    return {"mace_host_url": BROWSER_MACE_API_BASE}
+
+
+def _mace_proxy_path_allowed(path: str, method: str) -> bool:
+    method = method.upper()
+    fixed = {
+        "health": {"GET"},
+        "register": {"POST"},
+        "login": {"POST"},
+        "me": {"GET"},
+        "logout": {"POST"},
+        "users/search": {"GET"},
+        "users/block": {"POST"},
+        "friends": {"GET"},
+        "friends/request": {"POST"},
+    }
+    if path in fixed:
+        return method in fixed[path]
+    if re.fullmatch(r"friends/requests/[0-9]+/(?:accept|reject)", path):
+        return method == "POST"
+    if re.fullmatch(r"friends/[A-Za-z0-9_-]{3,40}", path):
+        return method == "DELETE"
+    if re.fullmatch(r"users/block/[A-Za-z0-9_-]{3,40}", path):
+        return method == "DELETE"
+    return False
+
+
+@app.route("/api/mace/<path:api_path>", methods=["GET", "POST", "DELETE"], strict_slashes=False)
+def mace_api_proxy(api_path):
+    """Proxy the small, allow-listed Mace Accounts API through the Flask site."""
+    if not _mace_proxy_path_allowed(api_path, request.method):
+        return jsonify({"detail": "Mace API endpoint or method is not allowed."}), 404
+
+    base = _mace_upstream_base()
+    upstream_url = base + "/" + api_path
+    if request.query_string:
+        upstream_url += "?" + request.query_string.decode("latin-1")
+
+    headers = {
+        "Accept": request.headers.get("Accept", "application/json"),
+        "User-Agent": "MaceLauncher-Website-Proxy/1.0",
+    }
+    authorization = request.headers.get("Authorization")
+    if authorization:
+        headers["Authorization"] = authorization
+
+    body = None
+    if request.method in {"POST", "DELETE"} and request.get_data(cache=True):
+        body = request.get_data(cache=True)
+        headers["Content-Type"] = request.headers.get("Content-Type", "application/json")
+
+    upstream_request = urllib.request.Request(
+        upstream_url,
+        data=body,
+        headers=headers,
+        method=request.method,
+    )
+    try:
+        with urllib.request.urlopen(upstream_request, timeout=18) as upstream:
+            content = upstream.read()
+            status = upstream.status
+            content_type = upstream.headers.get("Content-Type", "application/json")
+    except urllib.error.HTTPError as exc:
+        # API validation errors (400/401/409/422) are valid API responses;
+        # forward their status and JSON body unchanged so the form can explain them.
+        content = exc.read()
+        status = exc.code
+        content_type = exc.headers.get("Content-Type", "application/json")
+    except (urllib.error.URLError, TimeoutError, OSError) as exc:
+        app.logger.error("MaceHost proxy request failed for %s: %s", api_path, exc)
+        reason = getattr(exc, "reason", exc)
+        return jsonify({
+            "detail": "Сайт доступен, но не может подключиться к MaceHost. Проверьте деплой API и его логи.",
+            "code": "MACEHOST_UNREACHABLE",
+            "endpoint": api_path,
+            "reason": str(reason),
+        }), 502
+
+    response = app.response_class(content, status=status, content_type=content_type)
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    return response
 
 
 def _account_template_context():
@@ -139,7 +258,8 @@ def site_health():
     return jsonify({
         "ok": True,
         "service": "Mace Launcher Website",
-        "version": "accounts-routes-2026-10-22",
+        "version": "accounts-proxy-fix-2026-10-23",
+        "mace_api_proxy": "/api/mace/health",
         "routes": {"login": url_for("login_page"), "register": url_for("register_page"), "profile": url_for("account_profile_page")},
     })
 
