@@ -1,374 +1,128 @@
 <!DOCTYPE html>
-
 <html lang="ru">
-
 <head>
-
     <meta charset="UTF-8">
-
-    <meta
-        name="viewport"
-        content="width=device-width, initial-scale=1.0"
-    >
-
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Регистрация — Mace Launcher</title>
-
-    <link
-        rel="icon"
-        type="image/png"
-        href="{{ url_for('static', filename='icon.png') }}"
-    >
-
-    <link
-        rel="stylesheet"
-        href="{{ url_for('static', filename=css_file) }}"
-    >
-
+    <meta name="mace-api-base" content="{{ mace_host_url }}">
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='icon.png') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename=css_file) }}">
+    <style>
+        .account-page{min-height:80vh;display:flex;align-items:center;justify-content:center;padding:36px 16px}
+        .account-card{width:min(100%,470px);padding:30px;border:1px solid rgba(0,217,255,.22);border-radius:22px;background:rgba(18,24,34,.94);box-shadow:0 22px 70px rgba(0,0,0,.28);color:#edf5ff}
+        .account-logo{font-size:19px;font-weight:800;margin-bottom:25px}.account-description{color:#9eafc4;margin-top:-7px;margin-bottom:24px}
+        .account-card h1{margin-bottom:14px}.account-card label{display:block;margin:14px 0 7px;color:#becadd;font-size:13px}
+        .account-card input{box-sizing:border-box;width:100%;padding:13px 14px;border-radius:11px;border:1px solid #303d50;background:#0f141c;color:#f4f7fc;font:inherit;outline:none}
+        .account-card input:focus{border-color:#00d9ff;box-shadow:0 0 0 3px rgba(0,217,255,.12)}
+        .account-submit{margin-top:22px;width:100%;padding:13px;border:1px solid rgba(0,217,255,.5);border-radius:11px;background:linear-gradient(135deg,#073e4a,#125467);color:#e7fbff;font-weight:800;cursor:pointer}
+        .account-submit:disabled{opacity:.55;cursor:wait}.account-message{min-height:20px;margin-top:15px;white-space:pre-wrap;font-size:13px}.account-message.error{color:#ff7f91}.account-message.success{color:#62e0ac}
+        .account-switch,.back-home{display:block;text-align:center;margin-top:20px;color:#aab9ca}.account-switch a,.back-home{color:#00d9ff}.account-switch a{text-decoration:none;font-weight:700}.back-home{text-decoration:none;font-size:13px}
+        .server-hint{color:#8294aa;font-size:11px;margin-top:12px;overflow-wrap:anywhere}
+    </style>
 </head>
-
-
 <body>
-
     <div class="account-page">
-
         <div class="account-card">
-
-            <div class="account-logo">
-
-                Ⓜ️ Mace Launcher
-
-            </div>
-
-
-            <h1>
-
-                Регистрация
-
-            </h1>
-
-
-            <p class="account-description">
-
-                Создайте аккаунт Mace Launcher
-
-            </p>
-
-
-            <!-- Форма -->
-
+            <div class="account-logo">Ⓜ️ Mace Launcher</div>
+            <h1>Создать аккаунт</h1>
+            <p class="account-description">Единый аккаунт для Mace Launcher и будущих сервисов.</p>
             <form id="registerForm">
-
-
-                <label>
-
-                    Имя
-
-                </label>
-
-                <input
-
-                    type="text"
-
-                    id="username"
-
-                    placeholder="Введите имя"
-
-                    minlength="3"
-
-                    maxlength="32"
-
-                    required
-
-                >
-
-
-                <label>
-
-                    Почта
-
-                </label>
-
-                <input
-
-                    type="email"
-
-                    id="email"
-
-                    placeholder="Введите почту"
-
-                    required
-
-                >
-
-
-                <label>
-
-                    Пароль
-
-                </label>
-
-                <input
-
-                    type="password"
-
-                    id="password"
-
-                    placeholder="Введите пароль"
-
-                    minlength="6"
-
-                    required
-
-                >
-
-
-                <button
-                    type="submit"
-                    class="account-submit register-submit"
-                >
-
-                    Зарегистрироваться
-
-                </button>
-
-
+                <label for="username">Имя аккаунта</label>
+                <input type="text" id="username" autocomplete="username" placeholder="От 3 до 32 символов" minlength="3" maxlength="32" required>
+                <label for="email">Электронная почта</label>
+                <input type="email" id="email" autocomplete="email" placeholder="name@example.com" maxlength="254" required>
+                <label for="password">Пароль</label>
+                <input type="password" id="password" autocomplete="new-password" placeholder="Не менее 8 символов" minlength="8" maxlength="256" required>
+                <button type="submit" class="account-submit" id="submitButton">Зарегистрироваться</button>
             </form>
-
-
-            <div
-                id="message"
-                class="account-message"
-            ></div>
-
-
-            <p class="account-switch">
-
-                Уже есть аккаунт?
-
-                <a href="/login">
-
-                    Войти
-
-                </a>
-
-            </p>
-
-
-            <a
-                href="/"
-                class="back-home"
-            >
-
-                ← Вернуться на главную
-
-            </a>
-
-
+            <div id="message" class="account-message" role="status" aria-live="polite"></div>
+            <p class="account-switch">Уже есть аккаунт? <a id="loginLink" href="/login?lang={{ current_lang }}&theme={{ current_theme }}">Войти</a></p>
+            <a href="/?lang={{ current_lang }}&theme={{ current_theme }}" class="back-home">← Вернуться на главную</a>
+            <div class="server-hint">API-адрес загружается из mace_server.txt: <span id="serverAddress"></span></div>
         </div>
-
     </div>
-
-
-    <script>
-
-        // ======================================
-        // АДРЕС MaceHost
-        //
-        // Пока локальный сервер.
-        // Позже заменим на Koyeb URL.
-        // ======================================
-
-        const MACE_HOST =
-            "https://macehost.hostless.app/";
-
-
-        // ======================================
-        // Регистрация
-        // ======================================
-
-        document
-            .getElementById("registerForm")
-
-            .addEventListener(
-
-                "submit",
-
-                async function(event) {
-
-                    event.preventDefault();
-
-
-                    const username =
-
-                        document
-                            .getElementById(
-                                "username"
-                            )
-
-                            .value
-
-                            .trim();
-
-
-                    const email =
-
-                        document
-                            .getElementById(
-                                "email"
-                            )
-
-                            .value
-
-                            .trim();
-
-
-                    const password =
-
-                        document
-                            .getElementById(
-                                "password"
-                            )
-
-                            .value;
-
-
-                    const messageElement =
-
-                        document
-                            .getElementById(
-                                "message"
-                            );
-
-
-                    messageElement.textContent =
-
-                        "Регистрация...";
-
-
-                    try {
-
-                        const response =
-
-                            await fetch(
-
-                                `${MACE_HOST}/register`,
-
-                                {
-
-                                    method: "POST",
-
-                                    headers: {
-
-                                        "Content-Type":
-
-                                            "application/json"
-
-                                    },
-
-                                    body:
-
-                                        JSON.stringify({
-
-                                            username:
-
-                                                username,
-
-                                            email:
-
-                                                email,
-
-                                            password:
-
-                                                password
-
-                                        })
-
-                                }
-
-                            );
-
-
-                        const data =
-
-                            await response.json();
-
-
-                        // =========================
-                        // Ошибка
-                        // =========================
-
-                        if (!response.ok) {
-
-                            messageElement.textContent =
-
-                                data.detail
-                                ||
-                                "Ошибка регистрации";
-
-                            messageElement.className =
-
-                                "account-message error";
-
-                            return;
-
-                        }
-
-
-                        // =========================
-                        // Успех
-                        // =========================
-
-                        messageElement.innerHTML =
-
-                            `
-                            <strong>
-                                Аккаунт создан!
-                            </strong>
-
-                            <br><br>
-
-                            Имя:
-                            ${data.username}
-
-                            <br>
-
-                            MaceId:
-                            ${data.mace_id}
-                            `;
-
-
-                        messageElement.className =
-
-                            "account-message success";
-
-
-                    }
-
-                    catch (error) {
-
-                        console.error(error);
-
-
-                        messageElement.textContent =
-
-                            "Не удалось подключиться "
-                            +
-                            "к MaceHost";
-
-
-                        messageElement.className =
-
-                            "account-message error";
-
-                    }
-
-                }
-
-            );
-
-    </script>
-
-
+<script>
+(() => {
+    const MACE_HOST = document.querySelector('meta[name="mace-api-base"]').content.replace(/\/+$/, '');
+    const messageElement = document.getElementById('message');
+    const submitButton = document.getElementById('submitButton');
+    document.getElementById('serverAddress').textContent = MACE_HOST;
+    function showMessage(text, state) {
+        messageElement.textContent = text;
+        messageElement.className = 'account-message' + (state ? ' ' + state : '');
+    }
+
+    // Optional desktop-launcher callback. Only loopback HTTP URLs with a local
+    // callback path and a one-time state are accepted; ordinary site sign-in is unchanged.
+    function readLauncherCallback() {
+        const qs = new URLSearchParams(window.location.search);
+        const redirectUri = qs.get('redirect_uri') || '';
+        const state = qs.get('state') || '';
+        if (!redirectUri || !/^[A-Za-z0-9_-]{20,100}$/.test(state)) return null;
+        try {
+            const u = new URL(redirectUri);
+            if (u.protocol !== 'http:' || !['127.0.0.1', 'localhost'].includes(u.hostname) || u.pathname !== '/callback' || !u.port || u.username || u.password || u.search || u.hash) return null;
+            return { redirectUri: u.toString(), state };
+        } catch (_) { return null; }
+    }
+    const launcherCallback = readLauncherCallback();
+    function returnTokenToLauncher(token) {
+        if (!launcherCallback) return false;
+        const callback = new URL(launcherCallback.redirectUri);
+        callback.searchParams.set('state', launcherCallback.state);
+        callback.searchParams.set('token', token);
+        window.location.replace(callback.toString());
+        return true;
+    }
+    function preserveLauncherCallback(linkId) {
+        if (!launcherCallback) return;
+        const link = document.getElementById(linkId);
+        if (!link) return;
+        const next = new URL(link.href, window.location.origin);
+        next.searchParams.set('redirect_uri', launcherCallback.redirectUri);
+        next.searchParams.set('state', launcherCallback.state);
+        link.href = next.pathname + next.search + next.hash;
+    }
+    // If the user's browser already has a valid website session, send it back
+    // immediately instead of asking them to sign in a second time.
+    if (launcherCallback) {
+        const existingToken = localStorage.getItem('mace_access_token');
+        if (existingToken) {
+            fetch(`${MACE_HOST}/me`, { headers: { 'Accept': 'application/json', 'Authorization': 'Bearer ' + existingToken } })
+                .then(response => {
+                    if (response.ok) returnTokenToLauncher(existingToken);
+                    else localStorage.removeItem('mace_access_token');
+                }).catch(() => {});
+        }
+    }
+
+    preserveLauncherCallback('loginLink');
+    document.getElementById('registerForm').addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const username = document.getElementById('username').value.trim();
+        const email = document.getElementById('email').value.trim();
+        const password = document.getElementById('password').value;
+        submitButton.disabled = true;
+        showMessage('Создаём аккаунт…');
+        try {
+            const response = await fetch(`${MACE_HOST}/register`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
+                body: JSON.stringify({username, email, password})
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(data.detail || 'Не удалось создать аккаунт.');
+            if (!data.token || !data.mace_id) throw new Error('Сервер вернул неполный ответ.');
+            localStorage.setItem('mace_access_token', data.token);
+            showMessage(`Аккаунт создан!\nИмя: ${data.username}\nMaceId: ${data.mace_id}`, 'success');
+            if (!returnTokenToLauncher(data.token)) window.location.href = '/profile';
+        } catch (error) {
+            showMessage(error.message || 'Не удалось подключиться к MaceHost. Проверьте адрес сервера.', 'error');
+        } finally {
+            submitButton.disabled = false;
+        }
+    });
+})();
+</script>
 </body>
-
 </html>
