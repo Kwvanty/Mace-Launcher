@@ -2,6 +2,7 @@ import os
 import hashlib
 import subprocess
 import sqlite3
+import socket
 import re
 import urllib.error
 import urllib.parse
@@ -307,6 +308,46 @@ def site_health():
         "routes": {"login": url_for("login_page"), "register": url_for("register_page"), "profile": url_for("account_profile_page")},
     })
 
+
+
+@app.route("/api/mace/diagnostic", methods=["GET"])
+def mace_network_diagnostic():
+    """Temporary diagnostic for DNS and outbound HTTPS from the website host."""
+    host = "macehost.hostless.app"
+    result = {"ok": False, "host": host, "dns": None, "https": None}
+
+    try:
+        addresses = socket.getaddrinfo(host, 443, type=socket.SOCK_STREAM)
+        result["dns"] = sorted({item[4][0] for item in addresses})
+    except Exception as exc:
+        result["dns"] = f"{type(exc).__name__}: {exc}"
+
+    try:
+        diagnostic_request = urllib.request.Request(
+            f"https://{host}/health",
+            headers={"User-Agent": "MaceLauncher-Diagnostic/1.0", "Connection": "close"},
+            method="GET",
+        )
+        with urllib.request.urlopen(diagnostic_request, timeout=8) as upstream:
+            body = upstream.read(500).decode("utf-8", errors="replace")
+            result["https"] = {"status": upstream.status, "body": body}
+            result["ok"] = 200 <= upstream.status < 300
+    except urllib.error.HTTPError as exc:
+        # A valid HTTP response, even 4xx/5xx, proves network connectivity.
+        try:
+            body = exc.read(500).decode("utf-8", errors="replace")
+        except Exception:
+            body = ""
+        result["https"] = {"status": exc.code, "body": body}
+        result["ok"] = True
+    except Exception as exc:
+        result["https"] = f"{type(exc).__name__}: {exc}"
+
+    app.logger.warning(
+        "MaceHost diagnostic dns_ok=%s https_result=%s",
+        isinstance(result["dns"], list), result["https"]
+    )
+    return jsonify(result), (200 if result["ok"] else 502)
 
 def get_download_count():
     db = get_db()
