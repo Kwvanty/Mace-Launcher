@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Аккаунт — Mace Launcher</title>
+    <meta name="mace-api-base" content="{{ mace_host_url }}">
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='icon.png') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename=css_file) }}">
+    <style>
+        :root{color-scheme:dark;--bg:#0f141c;--panel:#171e29;--panel2:#202a38;--line:#303c4e;--text:#eaf1fa;--muted:#9aaabd;--accent:#00d9ff;--green:#65e0ad;--red:#ff7f91}
+        *{box-sizing:border-box}.mace-account-page{max-width:1120px;margin:0 auto;padding:34px 18px 64px;color:var(--text)}
+        .mace-account-header{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:22px;padding:18px 22px;border:1px solid var(--line);border-radius:18px;background:var(--panel)}
+        .mace-brand{display:flex;align-items:center;gap:13px}.mace-brand-icon{display:grid;place-items:center;width:45px;height:45px;border-radius:14px;background:#073b49;color:var(--accent);font-size:25px;font-weight:900}
+        .mace-brand h1{font-size:21px;margin:0}.mace-brand p{margin:4px 0 0;color:var(--muted);font-size:12px}
+        .mace-button{border:1px solid var(--line);border-radius:10px;background:var(--panel2);color:var(--text);padding:10px 14px;font-weight:700;cursor:pointer;transition:transform .15s,border-color .15s}.mace-button:hover{border-color:var(--accent);transform:translateY(-1px)}.mace-button.primary{background:#073b49;border-color:#08758a;color:#dffaff}.mace-button.danger{color:var(--red)}
+        .mace-profile-card{display:flex;align-items:center;gap:16px;padding:20px;border:1px solid var(--line);border-radius:18px;background:linear-gradient(135deg,#182330,#141b25);margin-bottom:18px}
+        .mace-avatar{width:64px;height:64px;display:grid;place-items:center;flex-shrink:0;background:#073b49;border:1px solid #08758a;border-radius:18px;color:var(--accent);font-size:26px;font-weight:900}
+        .mace-profile-info{flex:1;min-width:0}.mace-profile-info h2{font-size:20px;margin:0 0 7px}.mace-id{font-size:12px;color:var(--accent);font-family:ui-monospace,Consolas,monospace}.mace-profile-info p{font-size:12px;color:var(--muted);margin:6px 0 0;overflow-wrap:anywhere}
+        .mace-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px}.mace-card{min-width:0;border:1px solid var(--line);border-radius:18px;background:var(--panel);padding:18px}.mace-card h3{margin:0 0 14px;font-size:15px}.mace-card-heading{display:flex;justify-content:space-between;align-items:center;gap:8px}.mace-count{color:var(--accent);font-size:12px}
+        .mace-search-row{display:flex;gap:8px}.mace-search-row input{flex:1;min-width:0}.mace-input{width:100%;padding:12px 13px;border:1px solid var(--line);border-radius:10px;background:#0d1219;color:var(--text);font:inherit;outline:none}.mace-input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(0,217,255,.10)}
+        .mace-list{display:flex;flex-direction:column;gap:8px;margin-top:13px}.mace-person{display:flex;align-items:center;gap:10px;border:1px solid var(--line);background:var(--panel2);border-radius:12px;padding:10px}.mace-person-avatar{width:38px;height:38px;display:grid;place-items:center;border-radius:11px;background:#122f3a;color:var(--accent);font-weight:900;flex-shrink:0}.mace-person-main{min-width:0;flex:1}.mace-person-main strong{display:block;font-size:13px;overflow-wrap:anywhere}.mace-person-main small{display:block;color:var(--muted);font-size:11px;margin-top:3px}.mace-person-actions{display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end}.mace-person-actions .mace-button{font-size:11px;padding:7px 9px}.mace-empty{padding:18px 12px;text-align:center;color:var(--muted);font-size:12px;border:1px dashed var(--line);border-radius:12px;margin-top:10px}
+        .mace-section-separator{border:0;border-top:1px solid var(--line);margin:20px 0}.mace-message{min-height:24px;color:var(--muted);font-size:12px;margin:12px 0}.mace-message.error{color:var(--red)}.mace-message.success{color:var(--green)}.mace-footer{margin-top:22px;color:var(--muted);font-size:12px}.mace-footer a{color:var(--accent);text-decoration:none}
+        @media(max-width:760px){.mace-account-header{align-items:flex-start;flex-direction:column}.mace-grid{grid-template-columns:1fr}.mace-account-page{padding-top:18px}.mace-profile-card{align-items:flex-start}.mace-profile-card .mace-button{margin-left:auto}.mace-person{align-items:flex-start;flex-wrap:wrap}.mace-person-actions{width:100%;justify-content:flex-start;margin-left:48px}}
+    </style>
+</head>
+<body>
+<div class="mace-account-page">
+    <header class="mace-account-header">
+        <div class="mace-brand"><div class="mace-brand-icon">Ⓜ</div><div><h1>Mace Social</h1><p>Единый аккаунт и друзья Minecraft</p></div></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="mace-button" id="refreshButton">↻ Обновить</button><button class="mace-button" id="logoutButton">Выйти</button></div>
+    </header>
+    <section class="mace-profile-card" id="profileCard"><div class="mace-avatar">M</div><div class="mace-profile-info"><h2>Загружаем профиль…</h2><span class="mace-id">Подключаемся к Mace Accounts</span></div></section>
+    <div class="mace-message" id="message" role="status" aria-live="polite"></div>
+    <main class="mace-grid">
+        <section class="mace-card">
+            <div class="mace-card-heading"><h3>Найти игроков</h3><span class="mace-count">MACE SOCIAL</span></div>
+            <form class="mace-search-row" id="searchForm"><input class="mace-input" id="searchInput" placeholder="Имя пользователя или MaceId" minlength="2" maxlength="80" required><button class="mace-button primary" type="submit">Найти</button></form>
+            <div class="mace-list" id="searchResults"><div class="mace-empty">Найди друзей по имени или MaceId.</div></div>
+        </section>
+        <section class="mace-card">
+            <div class="mace-card-heading"><h3>Друзья</h3><span class="mace-count" id="friendsCount">0</span></div>
+            <div class="mace-list" id="friendsList"><div class="mace-empty">Загружаем список…</div></div>
+            <hr class="mace-section-separator">
+            <div class="mace-card-heading"><h3>Входящие заявки</h3><span class="mace-count" id="requestsCount">0</span></div>
+            <div class="mace-list" id="incomingList"><div class="mace-empty">Загружаем заявки…</div></div>
+            <hr class="mace-section-separator">
+            <div class="mace-card-heading"><h3>Исходящие заявки</h3></div>
+            <div class="mace-list" id="outgoingList"><div class="mace-empty">Нет ожидающих заявок.</div></div>
+        </section>
+    </main>
+    <p class="mace-footer">API: <span id="serverAddress"></span> · <a href="/">Mace Launcher</a></p>
+</div>
+<script>
+(() => {
+    const API = document.querySelector('meta[name="mace-api-base"]').content.replace(/\/+$/, '');
+    const token = () => localStorage.getItem('mace_access_token');
+    const $ = id => document.getElementById(id);
+    $('serverAddress').textContent = API;
+    function showMessage(text, state='') { $('message').textContent=text; $('message').className='mace-message'+(state?' '+state:''); }
+    async function api(path, method='GET', body=null) {
+        const headers={'Accept':'application/json','Authorization':'Bearer '+(token()||'')};
+        if(body!==null) headers['Content-Type']='application/json';
+        const response=await fetch(API+path,{method,headers,body:body===null?undefined:JSON.stringify(body)});
+        const data=await response.json().catch(()=>({}));
+        if(!response.ok) throw new Error(data.detail||'Ошибка запроса к Mace Accounts.');
+        return data;
+    }
+    function empty(container, text) { container.replaceChildren(); const div=document.createElement('div');div.className='mace-empty';div.textContent=text;container.appendChild(div); }
+    function addButton(parent,label,action,kind='') { const b=document.createElement('button');b.type='button';b.className='mace-button'+(kind?' '+kind:'');b.textContent=label;b.addEventListener('click',action);parent.appendChild(b);return b; }
+    function personCard(item, actions=[]) {
+        const row=document.createElement('div');row.className='mace-person';
+        const avatar=document.createElement('div');avatar.className='mace-person-avatar';avatar.textContent=(item.username||'M').slice(0,1).toUpperCase();row.appendChild(avatar);
+        const main=document.createElement('div');main.className='mace-person-main';
+        const name=document.createElement('strong');name.textContent=item.username||'Mace user';main.appendChild(name);
+        const id=document.createElement('small');id.textContent=item.mace_id||'';main.appendChild(id);row.appendChild(main);
+        if(actions.length){const box=document.createElement('div');box.className='mace-person-actions';actions.forEach(a=>addButton(box,a.label,a.run,a.kind||''));row.appendChild(box);}
+        return row;
+    }
+    async function loadProfile() {
+        if(!token()){window.location.href='/login';return;}
+        try {
+            const me=await api('/me');
+            $('profileCard').replaceChildren();
+            const avatar=document.createElement('div');avatar.className='mace-avatar';avatar.textContent=(me.username||'M').slice(0,1).toUpperCase();$('profileCard').appendChild(avatar);
+            const info=document.createElement('div');info.className='mace-profile-info';
+            const name=document.createElement('h2');name.textContent=me.username;info.appendChild(name);
+            const id=document.createElement('span');id.className='mace-id';id.textContent=me.mace_id;info.appendChild(id);
+            const email=document.createElement('p');email.textContent=me.email||'';info.appendChild(email);$('profileCard').appendChild(info);
+            await loadSocial();
+        } catch(error) {
+            showMessage(error.message,'error');
+            if(/сессия|войдите/i.test(error.message)){localStorage.removeItem('mace_access_token');setTimeout(()=>window.location.href='/login',600);}
+        }
+    }
+    async function loadSocial() {
+        const data=await api('/friends');
+        $('friendsCount').textContent=data.friends.length;
+        $('requestsCount').textContent=data.incoming.length;
+        $('friendsList').replaceChildren();
+        if(!data.friends.length) empty($('friendsList'),'Пока нет друзей. Найди игроков и отправь заявку.');
+        data.friends.forEach(friend=>$('friendsList').appendChild(personCard(friend,[{label:'Удалить',kind:'danger',run:()=>removeFriend(friend.mace_id)}])));
+        $('incomingList').replaceChildren();
+        if(!data.incoming.length) empty($('incomingList'),'Новых заявок пока нет.');
+        data.incoming.forEach(req=>$('incomingList').appendChild(personCard(req,[
+            {label:'Принять',kind:'primary',run:()=>respond(req.request_id,true)},
+            {label:'Отклонить',kind:'danger',run:()=>respond(req.request_id,false)}
+        ])));
+        $('outgoingList').replaceChildren();
+        if(!data.outgoing.length) empty($('outgoingList'),'Нет ожидающих заявок.');
+        data.outgoing.forEach(req=>$('outgoingList').appendChild(personCard(req,[{label:'Отменить',kind:'danger',run:()=>removeFriend(req.mace_id)}])));
+    }
+    async function searchUsers(event) {
+        event.preventDefault(); const q=$('searchInput').value.trim(); if(q.length<2)return;
+        empty($('searchResults'),'Ищем игроков…');
+        try {
+            const data=await api('/users/search?q='+encodeURIComponent(q));
+            $('searchResults').replaceChildren();
+            if(!data.users.length) return empty($('searchResults'),'Игроки не найдены.');
+            data.users.forEach(player=>$('searchResults').appendChild(personCard(player,[{label:'Добавить',kind:'primary',run:()=>sendRequest(player.mace_id)}])));
+        } catch(error) { showMessage(error.message,'error'); }
+    }
+    async function sendRequest(maceId) { try { await api('/friends/request','POST',{mace_id:maceId});showMessage('Заявка в друзья отправлена.','success');await loadSocial(); } catch(error){showMessage(error.message,'error');} }
+    async function respond(requestId,accept) { try { await api(`/friends/requests/${requestId}/${accept?'accept':'reject'}`,'POST',{});showMessage(accept?'Заявка принята.':'Заявка отклонена.', 'success');await loadSocial(); } catch(error){showMessage(error.message,'error');} }
+    async function removeFriend(maceId) { if(!confirm(`Удалить или отменить связь с ${maceId}?`))return;try{await api('/friends/'+encodeURIComponent(maceId),'DELETE');showMessage('Изменения сохранены.','success');await loadSocial();}catch(error){showMessage(error.message,'error');} }
+    $('searchForm').addEventListener('submit',searchUsers);
+    $('refreshButton').addEventListener('click',()=>loadProfile());
+    $('logoutButton').addEventListener('click',async()=>{try{await api('/logout','POST',{});}catch(_){}localStorage.removeItem('mace_access_token');window.location.href='/';});
+    loadProfile();
+})();
+</script>
+</body>
+</html>
