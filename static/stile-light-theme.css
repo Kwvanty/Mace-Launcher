@@ -148,59 +148,62 @@ body {
     -webkit-tap-highlight-color: transparent;
 }
 
-/* ===== ВОЙТИ — КРАСНАЯ ===== */
-#site-login-link {
-    background: linear-gradient(135deg, #f04452, #c81e3a);
-    border-color: rgba(255, 130, 140, 0.35);
-    box-shadow: 0 4px 14px rgba(240, 68, 82, 0.2);
+
+/* MACE — авторизация в шапке */
+.header-controls a#site-login-link,
+.header-controls a#site-register-link {
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+
+    padding: 10px 18px !important;
+    margin: 0 4px !important;
+
+    border-radius: 10px !important;
+    border: 1px solid transparent !important;
+
+    color: #ffffff !important;
+    font-size: 14px !important;
+    font-weight: 600 !important;
+    line-height: 1.4 !important;
+
+    text-decoration: none !important;
+    white-space: nowrap;
+
+    transition: all 0.25s ease !important;
 }
 
-#site-login-link:hover {
-    background: linear-gradient(135deg, #ff5967, #e52b45);
-    border-color: rgba(255, 170, 175, 0.7);
-    box-shadow: 0 6px 22px rgba(240, 68, 82, 0.4);
+/* Войти — красная */
+.header-controls a#site-login-link {
+    background: linear-gradient(135deg, #ff5263, #d7263d) !important;
+    border-color: rgba(255, 120, 135, 0.45) !important;
+    box-shadow: 0 4px 14px rgba(255, 55, 75, 0.2);
+}
+
+/* Регистрация — зелёная */
+.header-controls a#site-register-link {
+    background: linear-gradient(135deg, #32d583, #159957) !important;
+    border-color: rgba(100, 255, 175, 0.4) !important;
+    box-shadow: 0 4px 14px rgba(30, 210, 120, 0.2);
+}
+
+/* Наведение */
+.header-controls a#site-login-link:hover {
+    background: linear-gradient(135deg, #ff7180, #e9364e) !important;
+    box-shadow: 0 6px 20px rgba(255, 55, 75, 0.4);
     transform: translateY(-2px);
 }
 
-/* ===== РЕГИСТРАЦИЯ — ЗЕЛЁНАЯ ===== */
-#site-register-link {
-    background: linear-gradient(135deg, #22c978, #119653);
-    border-color: rgba(100, 255, 175, 0.3);
-    box-shadow: 0 4px 14px rgba(34, 201, 120, 0.2);
-}
-
-#site-register-link:hover {
-    background: linear-gradient(135deg, #35e68c, #16ad61);
-    border-color: rgba(140, 255, 190, 0.75);
-    box-shadow: 0 6px 22px rgba(34, 201, 120, 0.4);
+.header-controls a#site-register-link:hover {
+    background: linear-gradient(135deg, #4bea9a, #20b86c) !important;
+    box-shadow: 0 6px 20px rgba(30, 210, 120, 0.4);
     transform: translateY(-2px);
 }
 
-/* ===== Нажатие ===== */
-#site-login-link:active,
-#site-register-link:active {
-    transform: translateY(0) scale(0.97);
-}
-
-/* ===== Доступность ===== */
-#site-login-link:focus-visible,
-#site-register-link:focus-visible {
-    outline: 2px solid #ffffff;
-    outline-offset: 4px;
-}
-
-/* ===== Мобильные устройства ===== */
-@media (max-width: 480px) {
-    .header-controls {
-        gap: 8px;
-    }
-
-    #site-login-link,
-    #site-register-link {
-        padding: 9px 13px;
-        font-size: 13px;
-        border-radius: 10px;
-    }
+/* Нажатие */
+.header-controls a#site-login-link:active,
+.header-controls a#site-register-link:active {
+    transform: scale(0.97);
 }
 
 /* ================= МЕНЮ ЯЗЫКА ================= */
