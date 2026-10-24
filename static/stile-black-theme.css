@@ -76,7 +76,16 @@ body {
     align-items: center;
     gap: 15px;
 }
-
+.site-login-link {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+.site-register-link {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
 /* ================= МЕНЮ ЯЗЫКА ================= */
 .lang-dropdown {
     position: relative;
