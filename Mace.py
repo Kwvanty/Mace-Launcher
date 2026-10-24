@@ -86,7 +86,11 @@ def init_db():
                 ('1.0.6',
                  'Bug fixed.',
                  'Исправление багов',
-                 'Виправлення багів')
+                 'Виправлення багів'),
+                ('1.0.7',
+                 'The "Mace and Friends" account is now available! It features a custom launcher style, a color palette, animations, and a fully polished visual experience! Bugs related to launching the application, as well as various in-app issues, have been fixed.',
+                 'Аккаунт Mace и друзья теперь доступны! Стиль лаунчера, цветовая палитра, анимации и полная реализация хорошего визуала! Были исправленны баги с запуском и внутри-програмные баги.',
+                 'Аккаунт Mace та друзі тепер доступні! Стиль лаунчера, палітра кольорів, анімації та повна реалізація гарного візуалу! Були виправлені баги із запуском та внутрішньо-програмні баги.')
             ]
             cursor.executemany('INSERT INTO Mace (version, desc_en, desc_ru, desc_uk) VALUES (?, ?, ?, ?)', initial_updates)
         db.commit()
