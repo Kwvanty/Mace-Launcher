@@ -1,167 +1,218 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>Mace Launcher Admin Dashboard</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Mace Launcher — Admin Dashboard</title>
     <style>
-        body { 
-            background-color: #0f111a; 
-            color: #f1f5f9; 
-            font-family: 'Segoe UI', sans-serif; 
-            display: flex; 
-            justify-content: center; 
-            align-items: center; 
-            min-height: 100vh; 
-            margin: 0; 
-            padding: 20px; 
-            box-sizing: border-box; 
-        }
-        .admin-box { 
-            background: #1e2337; 
-            padding: 35px; 
-            border-radius: 12px; 
-            border: 1px solid #2e344e; 
-            width: 450px; 
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5); 
-        }
-        h2 { 
-            margin-top: 0; 
-            color: #38bdf8; 
-            text-align: center; 
-        }
-        h3 { 
-            color: #f1f5f9; 
-            font-size: 1.1rem; 
-            border-bottom: 1px solid #2e344e; 
-            padding-bottom: 8px; 
-            margin-top: 0; 
-            margin-bottom: 15px; 
-        }
-        label { 
-            display: block; 
-            margin-bottom: 5px; 
-            font-size: 0.85rem; 
-            color: #94a3b8; 
-        }
-        input[type="text"], 
-        input[type="password"], 
-        select, 
-        input[type="file"], 
-        textarea { 
-            width: 100%; 
-            padding: 10px; 
-            margin-bottom: 15px; 
-            border-radius: 6px; 
-            border: 1px solid #3b4366; 
-            background: #161927; 
-            color: #fff; 
-            box-sizing: border-box; 
-            font-family: inherit; 
-        }
-        textarea { 
-            resize: vertical; 
-            min-height: 60px; 
-        }
-        button { 
-            background: #0284c7; 
-            color: white; 
-            border: none; 
-            padding: 12px 20px; 
-            border-radius: 6px; 
-            cursor: pointer; 
-            font-weight: bold; 
-            width: 100%; 
-            margin-top: 5px; 
-            transition: background 0.2s; 
-        }
-        button:hover { 
-            background: #0369a1; 
-        }
-        .alert { 
-            padding: 10px; 
-            border-radius: 6px; 
-            margin-bottom: 20px; 
-            font-size: 0.9rem; 
-        }
-        .alert.error { background: #7f1d1d; color: #fca5a5; }
-        .alert.success { background: #14532d; color: #86efac; }
-        .alert.warning { background: #713f12; color: #fde047; }
-        .logout-btn { 
-            background: #dc2626; 
-            margin-top: 15px; 
-        }
-        .logout-btn:hover { 
-            background: #b91c1c; 
-        }
-        .section-box { 
-            background: #161927; 
-            padding: 15px; 
-            border-radius: 8px; 
-            margin-bottom: 20px; 
-            border: 1px solid #2a3047; 
-        }
+        :root { color-scheme: dark; --bg:#0f111a; --panel:#1e2337; --panel2:#161927; --border:#2e344e; --text:#f1f5f9; --muted:#94a3b8; --blue:#38bdf8; --green:#4ade80; --red:#f87171; }
+        * { box-sizing:border-box; }
+        body { background:var(--bg); color:var(--text); font-family:Segoe UI,Arial,sans-serif; margin:0; padding:28px; }
+        .wrap { width:min(1180px,100%); margin:0 auto; }
+        h1,h2,h3,p { margin-top:0; } h1 { color:var(--blue); margin-bottom:6px; }
+        .subtitle { color:var(--muted); margin-bottom:24px; }
+        .admin-box,.section-box,.stat { background:var(--panel); border:1px solid var(--border); border-radius:12px; }
+        .admin-box { width:min(460px,100%); margin:7vh auto; padding:32px; box-shadow:0 10px 30px #0005; }
+        .login-title { text-align:center; }
+        .section-box { padding:20px; margin:0 0 20px; min-width:0; }
+        h3 { font-size:1.05rem; border-bottom:1px solid var(--border); padding-bottom:10px; margin-bottom:16px; }
+        label { display:block; margin:0 0 6px; color:var(--muted); font-size:.88rem; }
+        input[type=text],input[type=password],select,input[type=file],textarea { width:100%; padding:11px; margin-bottom:15px; border-radius:7px; border:1px solid #3b4366; background:var(--panel2); color:white; font:inherit; }
+        textarea { resize:vertical; min-height:70px; }
+        button { background:#0284c7; color:white; border:0; padding:11px 16px; border-radius:7px; cursor:pointer; font-weight:700; transition:background .2s; }
+        button:hover { background:#0369a1; } button:disabled { opacity:.5; cursor:wait; }
+        .wide { width:100%; } .logout-btn { background:#dc2626; } .logout-btn:hover { background:#b91c1c; }
+        .alert { padding:11px 13px; border-radius:7px; margin-bottom:18px; font-size:.92rem; }
+        .alert.error { background:#7f1d1d; color:#fecaca; } .alert.success { background:#14532d; color:#bbf7d0; } .alert.warning { background:#713f12; color:#fde68a; }
+        .grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:14px; margin-bottom:20px; }
+        .stat { padding:17px; background:var(--panel2); } .stat-label { color:var(--muted); font-size:.84rem; } .stat-value { font-size:1.8rem; font-weight:750; margin-top:7px; }
+        .columns { display:grid; grid-template-columns:minmax(0,1.1fr) minmax(0,1fr); gap:20px; }
+        .chart { height:190px; display:flex; align-items:stretch; gap:10px; padding-top:10px; }
+        .bar-col { flex:1; min-width:0; display:flex; flex-direction:column; justify-content:flex-end; align-items:center; gap:7px; }
+        .bar-value { color:var(--muted); font-size:.75rem; } .bar { width:min(34px,75%); min-height:3px; background:linear-gradient(180deg,#38bdf8,#0284c7); border-radius:5px 5px 0 0; }
+        .bar-day { color:var(--muted); font-size:.7rem; white-space:nowrap; }
+        .type-row { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 0; border-bottom:1px solid var(--border); } .type-row:last-child { border:0; }
+        .pill { display:inline-block; padding:4px 8px; border-radius:5px; background:#243047; color:#bae6fd; font-size:.75rem; }
+        .table-wrap { overflow:auto; max-height:380px; } table { width:100%; border-collapse:collapse; font-size:.85rem; } th,td { padding:10px 9px; border-bottom:1px solid var(--border); text-align:left; vertical-align:top; } th { color:var(--muted); font-weight:600; position:sticky; top:0; background:var(--panel); } td { overflow-wrap:anywhere; }
+        .console { background:#090d14; border:1px solid #263044; border-radius:8px; padding:12px; height:330px; overflow:auto; font:12px/1.6 Consolas,monospace; }
+        .log-line { display:grid; grid-template-columns:145px 100px minmax(0,1fr); gap:10px; padding:4px 0; border-bottom:1px solid #172033; }
+        .log-time { color:#64748b; } .log-type { color:var(--blue); } .log-desc { color:#cbd5e1; overflow-wrap:anywhere; }
+        .toolbar { display:flex; gap:10px; flex-wrap:wrap; align-items:center; justify-content:space-between; margin-bottom:12px; } .toolbar p { color:var(--muted); margin:0; font-size:.82rem; }
+        .small-btn { width:auto; padding:8px 12px; } .muted { color:var(--muted); } .empty { color:var(--muted); padding:18px 0; text-align:center; }
+        @media(max-width:850px) { .grid { grid-template-columns:repeat(2,minmax(0,1fr)); } .columns { grid-template-columns:1fr; } body { padding:15px; } }
+        @media(max-width:520px) { .grid { grid-template-columns:1fr 1fr; gap:8px; } .stat { padding:12px; } .stat-value { font-size:1.4rem; } .log-line { grid-template-columns:1fr; gap:0; padding:8px 0; } .admin-box { padding:22px; } }
     </style>
 </head>
 <body>
-    <div class="admin-box">
-        <h2>🔒 Mace Admin Panel</h2>
-        
-        {% if msg %}
-            <div class="alert {{ status_type }}">{{ msg }}</div>
-        {% endif %}
+{% if not logged_in %}
+    <main class="admin-box">
+        <h2 class="login-title">🔒 Mace Admin Panel</h2>
+        {% if msg %}<div class="alert {{ status_type }}">{{ msg }}</div>{% endif %}
+        <form method="POST">
+            <input type="hidden" name="action" value="login">
+            <label for="password">Admin Password:</label>
+            <input id="password" type="password" name="password" required placeholder="Enter password..." autocomplete="current-password">
+            <button class="wide" type="submit">Login</button>
+        </form>
+    </main>
+{% else %}
+    <main class="wrap">
+        <header>
+            <h1>⚡ Mace Launcher Admin</h1>
+            <p class="subtitle">Управление сайтом · аналитика · журнал событий</p>
+        </header>
+        {% if msg %}<div class="alert {{ status_type }}">{{ msg }}</div>{% endif %}
 
-        {% if not logged_in %}
-            <form method="POST">
-                <input type="hidden" name="action" value="login">
-                <label>Admin Password (SHA-256 Protected):</label>
-                <input type="password" name="password" required placeholder="Enter password...">
-                <button type="submit">Login</button>
-            </form>
-        {% else %}
+        <section class="section-box">
+            <h3>📊 Аналитика скачиваний</h3>
+            <div class="grid">
+                <div class="stat"><div class="stat-label">Всего скачиваний установщика*</div><div class="stat-value" id="total">—</div></div>
+                <div class="stat"><div class="stat-label">Сегодня</div><div class="stat-value" id="today">—</div></div>
+                <div class="stat"><div class="stat-label">Последние 7 дней (все файлы)</div><div class="stat-value" id="week">—</div></div>
+                <div class="stat"><div class="stat-label">Последние 30 дней (все файлы)</div><div class="stat-value" id="month">—</div></div>
+            </div>
+            <p class="muted" style="font-size:.8rem">* Общее число — прежний счётчик установщиков. Периоды и график учитывают все файлы; подробная история доступна с момента внедрения аналитики.</p>
+            <div class="columns">
+                <div>
+                    <h3>Скачивания за 7 дней</h3>
+                    <div id="daily-chart" class="chart"><div class="empty">Загрузка аналитики…</div></div>
+                </div>
+                <div>
+                    <h3>По типу файла</h3>
+                    <div id="type-breakdown"><div class="empty">Загрузка…</div></div>
+                </div>
+            </div>
+        </section>
 
-            <div class="section-box">
+        <section class="section-box">
+            <div class="toolbar"><h3 style="border:0;padding:0;margin:0">📥 Последние скачивания</h3><button class="small-btn" type="button" onclick="loadAnalytics()">Обновить</button></div>
+            <div class="table-wrap">
+                <table><thead><tr><th>Дата (UTC)</th><th>Тип</th><th>Файл</th></tr></thead><tbody id="downloads-table"><tr><td colspan="3" class="muted">Загрузка…</td></tr></tbody></table>
+            </div>
+        </section>
+
+        <section class="section-box">
+            <div class="toolbar">
+                <div><h3 style="border:0;padding:0;margin:0 0 5px">🖥️ Консоль действий сайта</h3><p>Автообновление каждые 5 секунд · IP-адреса и содержимое форм не сохраняются</p></div>
+                <div><button class="small-btn" type="button" id="pause-btn" onclick="togglePause()">Пауза</button> <button class="small-btn" type="button" onclick="loadAnalytics()">Обновить</button></div>
+            </div>
+            <div class="console" id="event-console" aria-live="polite"><div class="empty">Загрузка событий…</div></div>
+        </section>
+
+        <div class="columns">
+            <section class="section-box">
                 <h3>📁 Upload File & Push</h3>
                 <form method="POST" enctype="multipart/form-data">
                     <input type="hidden" name="action" value="upload">
                     <label>Upload Target Directory:</label>
-                    <select name="upload_type">
-                        <option value="installer">Installer (Mace Installer/)</option>
-                        <option value="update">Update (update/)</option>
-                    </select>
-
-                    <label>Select File:</label>
-                    <input type="file" name="file" required>
-
-                    <button type="submit">Upload & Push to GitHub</button>
+                    <select name="upload_type"><option value="installer">Installer (Mace Installer/)</option><option value="update">Update (update/)</option></select>
+                    <label>Select File:</label><input type="file" name="file" required>
+                    <button class="wide" type="submit">Upload & Push to GitHub</button>
                 </form>
-            </div>
-
-            <div class="section-box">
+            </section>
+            <section class="section-box">
                 <h3>🚀 Add Update to Patch Notes</h3>
                 <form method="POST">
                     <input type="hidden" name="action" value="add_patch">
-                    
-                    <label>Version Number (e.g. 1.0.4):</label>
-                    <input type="text" name="version" required placeholder="1.0.4">
-
-                    <label>Description (English 🇬🇧):</label>
-                    <textarea name="desc_en" required placeholder="Added new feature..."></textarea>
-
-                    <label>Description (Русский 🇷🇺):</label>
-                    <textarea name="desc_ru" required placeholder="Добавлена новая функция..."></textarea>
-
-                    <label>Description (Українська 🇺🇦):</label>
-                    <textarea name="desc_uk" required placeholder="Додано нову функцію..."></textarea>
-
-                    <button type="submit">Add Update & Push Git</button>
+                    <label>Version Number (e.g. 1.0.4):</label><input type="text" name="version" required placeholder="1.0.4">
+                    <label>Description (English 🇬🇧):</label><textarea name="desc_en" required placeholder="Added new feature..."></textarea>
+                    <label>Description (Русский 🇷🇺):</label><textarea name="desc_ru" required placeholder="Добавлена новая функция..."></textarea>
+                    <label>Description (Українська 🇺🇦):</label><textarea name="desc_uk" required placeholder="Додано нову функцію..."></textarea>
+                    <button class="wide" type="submit">Add Update & Push Git</button>
                 </form>
-            </div>
-
-            <form method="POST">
-                <input type="hidden" name="action" value="logout">
-                <button type="submit" class="logout-btn">Logout</button>
-            </form>
-        {% endif %}
-    </div>
+            </section>
+        </div>
+        <form method="POST"><input type="hidden" name="action" value="logout"><button class="logout-btn" type="submit">Logout</button></form>
+    </main>
+    <script>
+        let paused = false;
+        let timer = null;
+        const $ = id => document.getElementById(id);
+        const safe = value => String(value ?? '');
+        function addCell(row, value) {
+            const cell = document.createElement('td');
+            cell.textContent = safe(value);
+            row.appendChild(cell);
+        }
+        function formatTime(value) {
+            if (!value) return '—';
+            return safe(value).replace('T', ' ').replace('+00:00', ' UTC');
+        }
+        function renderChart(items) {
+            const root = $('daily-chart');
+            root.replaceChildren();
+            const max = Math.max(1, ...items.map(item => Number(item.count) || 0));
+            items.forEach(item => {
+                const col = document.createElement('div'); col.className = 'bar-col';
+                const value = document.createElement('div'); value.className = 'bar-value'; value.textContent = item.count;
+                const bar = document.createElement('div'); bar.className = 'bar';
+                bar.style.height = `${Math.max(3, (Number(item.count) / max) * 125)}px`;
+                bar.title = `${item.day}: ${item.count}`;
+                const day = document.createElement('div'); day.className = 'bar-day'; day.textContent = item.day.slice(5);
+                col.append(value, bar, day); root.appendChild(col);
+            });
+        }
+        function renderTypes(types) {
+            const root = $('type-breakdown'); root.replaceChildren();
+            const labels = {installer:'Установщики', update:'Обновления'};
+            const entries = Object.entries(types || {});
+            if (!entries.length) { root.innerHTML = '<div class="empty">Пока нет записей. Новые скачивания появятся здесь.</div>'; return; }
+            entries.forEach(([type,count]) => {
+                const row = document.createElement('div'); row.className = 'type-row';
+                const name = document.createElement('span'); name.textContent = labels[type] || type;
+                const value = document.createElement('strong'); value.textContent = count;
+                row.append(name,value); root.appendChild(row);
+            });
+        }
+        function renderDownloads(items) {
+            const body = $('downloads-table'); body.replaceChildren();
+            if (!items.length) { const row = body.insertRow(); const cell = row.insertCell(); cell.colSpan=3; cell.className='muted'; cell.textContent='Пока нет детальной истории скачиваний.'; return; }
+            items.forEach(item => {
+                const row = body.insertRow();
+                addCell(row, formatTime(item.created_at));
+                addCell(row, item.download_type === 'installer' ? 'Установщик' : item.download_type === 'update' ? 'Обновление' : item.download_type);
+                addCell(row, item.filename);
+            });
+        }
+        function renderEvents(items) {
+            const root = $('event-console'); root.replaceChildren();
+            if (!items.length) { const empty=document.createElement('div'); empty.className='empty'; empty.textContent='Событий пока нет.'; root.appendChild(empty); return; }
+            items.forEach(item => {
+                const line = document.createElement('div'); line.className='log-line';
+                const time=document.createElement('span'); time.className='log-time'; time.textContent=formatTime(item.created_at);
+                const type=document.createElement('span'); type.className='log-type'; type.textContent=safe(item.event_type).toUpperCase();
+                const desc=document.createElement('span'); desc.className='log-desc'; desc.textContent=`${item.description} [${item.status_code}]`;
+                line.append(time,type,desc); root.appendChild(line);
+            });
+            root.scrollTop = 0;
+        }
+        async function loadAnalytics() {
+            try {
+                const response = await fetch('/admin/analytics', {credentials:'same-origin', cache:'no-store'});
+                if (response.status === 401) { location.reload(); return; }
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                const data = await response.json();
+                $('total').textContent = data.total ?? 0;
+                $('today').textContent = data.today ?? 0;
+                $('week').textContent = data.last_7_days ?? 0;
+                $('month').textContent = data.last_30_days ?? 0;
+                renderChart(data.daily || []);
+                renderTypes(data.by_type || {});
+                renderDownloads(data.downloads || []);
+                renderEvents(data.events || []);
+            } catch (error) {
+                $('event-console').textContent = `Не удалось загрузить аналитику: ${error.message}`;
+            }
+        }
+        function togglePause() {
+            paused = !paused;
+            $('pause-btn').textContent = paused ? 'Продолжить' : 'Пауза';
+            if (timer) clearInterval(timer);
+            timer = paused ? null : setInterval(loadAnalytics, 5000);
+        }
+        loadAnalytics();
+        timer = setInterval(loadAnalytics, 5000);
+    </script>
+{% endif %}
 </body>
 </html>
