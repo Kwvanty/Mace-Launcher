@@ -4,6 +4,8 @@ import subprocess
 import sqlite3
 import socket
 import re
+import uuid
+from datetime import datetime, timedelta, timezone
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -93,6 +95,28 @@ def init_db():
                  'Аккаунт Mace та друзі тепер доступні! Стиль лаунчера, палітра кольорів, анімації та повна реалізація гарного візуалу! Були виправлені баги із запуском та внутрішньо-програмні баги.')
             ]
             cursor.executemany('INSERT INTO Mace (version, desc_en, desc_ru, desc_uk) VALUES (?, ?, ?, ?)', initial_updates)
+
+        # Detailed download history and privacy-conscious site activity log.
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS download_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                created_at TEXT NOT NULL,
+                download_type TEXT NOT NULL,
+                filename TEXT NOT NULL
+            )
+        ''')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS site_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                created_at TEXT NOT NULL,
+                event_type TEXT NOT NULL,
+                path TEXT NOT NULL,
+                description TEXT NOT NULL,
+                status_code INTEGER NOT NULL DEFAULT 200
+            )
+        ''')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_download_events_created_at ON download_events(created_at)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_site_events_created_at ON site_events(created_at)')
         db.commit()
 
 init_db()
@@ -266,6 +290,12 @@ def mace_api_proxy(api_path):
     )
     response.headers["Cache-Control"] = "no-store"
     response.headers["X-Content-Type-Options"] = "nosniff"
+    if request.method in {"POST", "DELETE"} and status < 500:
+        # Record only the endpoint and outcome, never tokens, payloads, or account secrets.
+        record_site_event(
+            "account_action", request.path,
+            f"{request.method} account/API action: {api_path}", status
+        )
     return response
 
 
@@ -364,6 +394,63 @@ def increment_download_count():
     db.execute('UPDATE downloads SET count = count + 1 WHERE id = 1')
     db.commit()
     return get_download_count()
+
+
+def _utc_now():
+    return datetime.now(timezone.utc).isoformat(timespec='seconds')
+
+
+def record_site_event(event_type, path, description, status_code=200):
+    """Store a minimal site event. Do not store IP addresses, credentials, or request bodies."""
+    try:
+        db = get_db()
+        db.execute(
+            'INSERT INTO site_events (created_at, event_type, path, description, status_code) VALUES (?, ?, ?, ?, ?)',
+            (_utc_now(), str(event_type)[:40], str(path)[:300], str(description)[:300], int(status_code))
+        )
+        db.commit()
+    except Exception:
+        app.logger.exception('Could not save site analytics event')
+
+
+def record_download(download_type, filename):
+    db = get_db()
+    now = _utc_now()
+    safe_filename = os.path.basename(filename)[:255]
+    db.execute(
+        'INSERT INTO download_events (created_at, download_type, filename) VALUES (?, ?, ?)',
+        (now, download_type, safe_filename)
+    )
+    db.commit()
+    record_site_event(
+        'download', request.path,
+        f'{download_type} download requested: {safe_filename}', 200
+    )
+
+
+def _admin_required():
+    return bool(session.get('admin_logged_in'))
+
+
+@app.after_request
+def record_public_page_activity(response):
+    """Log page visits and non-sensitive website actions, but never admin/API/static traffic."""
+    try:
+        endpoint = request.endpoint or ''
+        path = request.path
+        if (endpoint and endpoint not in {'static', 'admin_panel', 'admin_analytics', 'mace_api_proxy',
+                                         'mace_network_diagnostic', 'site_health', 'sitemap',
+                                         'google_verification', 'ai_info'}
+                and not path.startswith(('/api/', '/static/', '/download/'))
+                and response.status_code < 500):
+            if request.method == 'GET' and response.mimetype == 'text/html':
+                record_site_event('page_view', path, f'Opened page: {path}', response.status_code)
+            elif request.method in {'POST', 'PUT', 'PATCH', 'DELETE'}:
+                # Only record the route/method, never submitted form data.
+                record_site_event('site_action', path, f'{request.method} request to {path}', response.status_code)
+    except Exception:
+        app.logger.exception('Could not record public page activity')
+    return response
 
 def get_latest_version():
     db = get_db()
@@ -791,6 +878,7 @@ def download_installer(filename):
         return f"File not found at: {file_path}", 404
 
     increment_download_count()
+    record_download('installer', filename)
     current_version = get_latest_version()
 
     response = make_response(send_from_directory(installer_dir, filename, as_attachment=True))
@@ -805,11 +893,74 @@ def download_update(filename):
     if not os.path.exists(file_path):
         return f"File not found at: {file_path}", 404
 
+    record_download('update', filename)
     current_version = get_latest_version()
     response = make_response(send_from_directory(update_dir, filename, as_attachment=True))
     response.set_cookie('user_downloaded', 'true', max_age=315360000)
     response.set_cookie('user_version', current_version, max_age=315360000)
     return response
+
+@app.route('/admin/analytics', methods=['GET'])
+def admin_analytics():
+    if not _admin_required():
+        return jsonify({'ok': False, 'error': 'Unauthorized'}), 401
+
+    db = get_db()
+    now = datetime.now(timezone.utc)
+    today = now.date().isoformat()
+    since_7 = (now - timedelta(days=6)).date().isoformat()
+    since_30 = (now - timedelta(days=29)).date().isoformat()
+
+    total = get_download_count()
+    today_count = db.execute(
+        'SELECT COUNT(*) FROM download_events WHERE substr(created_at, 1, 10) = ?', (today,)
+    ).fetchone()[0]
+    last_7 = db.execute(
+        'SELECT COUNT(*) FROM download_events WHERE substr(created_at, 1, 10) >= ?', (since_7,)
+    ).fetchone()[0]
+    last_30 = db.execute(
+        'SELECT COUNT(*) FROM download_events WHERE substr(created_at, 1, 10) >= ?', (since_30,)
+    ).fetchone()[0]
+
+    by_type_rows = db.execute(
+        'SELECT download_type, COUNT(*) AS count FROM download_events GROUP BY download_type'
+    ).fetchall()
+    by_type = {row['download_type']: row['count'] for row in by_type_rows}
+
+    daily_rows = db.execute('''
+        SELECT substr(created_at, 1, 10) AS day, COUNT(*) AS count
+        FROM download_events
+        WHERE substr(created_at, 1, 10) >= ?
+        GROUP BY day ORDER BY day ASC
+    ''', (since_7,)).fetchall()
+    daily_lookup = {row['day']: row['count'] for row in daily_rows}
+    daily = [
+        {'day': (now.date() - timedelta(days=offset)).isoformat(),
+         'count': daily_lookup.get((now.date() - timedelta(days=offset)).isoformat(), 0)}
+        for offset in range(6, -1, -1)
+    ]
+
+    downloads = [dict(row) for row in db.execute('''
+        SELECT id, created_at, download_type, filename
+        FROM download_events ORDER BY id DESC LIMIT 30
+    ''').fetchall()]
+    events = [dict(row) for row in db.execute('''
+        SELECT id, created_at, event_type, path, description, status_code
+        FROM site_events ORDER BY id DESC LIMIT 100
+    ''').fetchall()]
+
+    return jsonify({
+        'ok': True,
+        'total': total,
+        'today': today_count,
+        'last_7_days': last_7,
+        'last_30_days': last_30,
+        'by_type': by_type,
+        'daily': daily,
+        'downloads': downloads,
+        'events': events,
+    })
+
 
 @app.route('/admin', methods=['GET', 'POST'])
 def admin_panel():
@@ -838,12 +989,19 @@ def admin_panel():
                 target_dir = os.path.join(app.root_path, 'Mace Installer') if upload_type == 'installer' else os.path.join(app.root_path, 'update')
                 os.makedirs(target_dir, exist_ok=True)
                 
-                file_path = os.path.join(target_dir, file.filename)
+                safe_filename = file.filename.replace(chr(92), '/').rsplit('/', 1)[-1]
+                if not safe_filename or safe_filename in {'.', '..'}:
+                    msg = "Invalid filename!"
+                    status_type = "error"
+                    logged_in = session.get('admin_logged_in', False)
+                    return render_template('admin.html', logged_in=logged_in, msg=msg, status_type=status_type)
+                file_path = os.path.join(target_dir, safe_filename)
                 file.save(file_path)
+                record_site_event('admin_upload', '/admin', f'Admin uploaded {upload_type}: {safe_filename}', 200)
 
-                success, git_msg = git_push_changes(f"Admin uploaded new {upload_type}: {file.filename}")
+                success, git_msg = git_push_changes(f"Admin uploaded new {upload_type}: {safe_filename}")
                 if success:
-                    msg = f"File {file.filename} uploaded successfully and pushed to GitHub!"
+                    msg = f"File {safe_filename} uploaded successfully and pushed to GitHub!"
                     status_type = "success"
                 else:
                     msg = f"File uploaded locally, but Git Push failed: {git_msg}"
@@ -863,6 +1021,7 @@ def admin_panel():
                 db.execute('INSERT INTO Mace (version, desc_en, desc_ru, desc_uk) VALUES (?, ?, ?, ?)', 
                            (version, desc_en, desc_ru, desc_uk))
                 db.commit()
+                record_site_event('admin_patch', '/admin', f'Admin added patch version {version}', 200)
 
                 success, git_msg = git_push_changes(f"Admin added update patch v{version} to history")
                 if success:
